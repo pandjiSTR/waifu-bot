@@ -34,32 +34,44 @@ services:
         sync: false
       # ── Optional (in-code defaults; may be left blank) ──
       - key: OWNER_NAME
+        value: ''
       - key: BLACKLIST
+        value: ''
       - key: OLLAMA_MODEL
+        value: ''
       - key: OLLAMA_TIMEOUT_MS
+        value: ''
       - key: MAX_CONTEXT_MESSAGES
+        value: ''
       - key: MAX_GROUP_CONTEXT_MESSAGES
+        value: ''
       - key: GROUP_CTX_TTL_DAYS
-      # Optional seed for auto-chat toggle — only seeds on first start,
-      # subsequent toggles via dashboard override the Redis key.
+        value: ''
       - key: AUTO_CHAT_ENABLED
+        value: ''
       - key: LOG_LEVEL
+        value: ''
       - key: CIRCUIT_BREAKER_THRESHOLD
+        value: ''
       - key: CIRCUIT_BREAKER_COOLDOWN_MS
+        value: ''
       - key: CHUNK_SEND_RETRY
-      # Print QR code to terminal for WhatsApp pairing
+        value: ''
       - key: WA_PRINT_QR
         value: 'false'
-      # Optional LLM overrides
       - key: OLLAMA_HOST
+        value: ''
       - key: OLLAMA_RETRY_BASE_MS
+        value: ''
       - key: OLLAMA_WEB_BASE
-      # Optional whitelist (comma-separated JIDs)
+        value: ''
       - key: WHITELIST
-      # Circuit breaker fallback message when LLM is unavailable
+        value: ''
       - key: CIRCUIT_BREAKER_FALLBACK
-      # Optional auto-chat scheduling
+        value: ''
       - key: AUTO_CHAT_INTERVAL_MS
+        value: ''
       - key: AUTO_CHAT_MIN_GAP_MS
-      # Enable context-window summarization (extra LLM calls)
+        value: ''
       - key: ENABLE_CONTEXT_SUMMARY
+        value: ''
