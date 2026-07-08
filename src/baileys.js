@@ -3,6 +3,7 @@ import makeWASocket, {
   isJidGroup,
   fetchLatestBaileysVersion,
 } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { shouldProcess, processLLM, extractText } from './pipeline.js';
@@ -14,6 +15,16 @@ let connectionState = 'disconnected';
 
 export function getConnectionState() {
   return connectionState;
+}
+
+async function clearRedisAuth(redis) {
+  try {
+    await redis?.del('waifu:auth:creds');
+    await redis?.del('waifu:auth:keys');
+    logger.info('Redis auth cleared');
+  } catch (e) {
+    logger.warn({ e }, 'Failed to clear auth keys');
+  }
 }
 
 export async function initWhatsApp(redis) {
@@ -54,24 +65,23 @@ export async function initWhatsApp(redis) {
         logger.info('WhatsApp connected');
       } else if (connection === 'close') {
         connectionState = 'disconnected';
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const streamError = lastDisconnect?.error?.message || '';
-        const isStreamError = streamError.includes('515') || streamError.includes('stream');
+        const statusCode = lastDisconnect?.error
+          ? new Boom(lastDisconnect?.error)?.output?.statusCode
+          : undefined;
 
-        const needsReinit = isStreamError || statusCode === DisconnectReason.loggedOut;
+        const needsReinit =
+          statusCode === 440 ||
+          statusCode === 500 ||
+          statusCode === 515 ||
+          statusCode === DisconnectReason.loggedOut;
 
         if (needsReinit) {
-          logger.error('Auth invalid — clearing session for fresh QR');
-          try {
-            await redis?.del('waifu:auth:creds');
-            await redis?.del('waifu:auth:keys');
-          } catch (e) {
-            logger.warn({ e }, 'Failed to clear auth keys');
-          }
+          logger.error({ statusCode }, 'Auth invalid — clearing session for fresh QR');
+          await clearRedisAuth(redis);
           logger.info('Exiting process — Render will restart with fresh auth');
           process.exit(1);
         } else {
-          logger.warn('WhatsApp connection closed — baileys will auto-reconnect');
+          logger.warn({ statusCode }, 'WhatsApp connection closed — baileys will auto-reconnect');
         }
       }
     });
