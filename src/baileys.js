@@ -55,8 +55,18 @@ export async function initWhatsApp(redis) {
       } else if (connection === 'close') {
         connectionState = 'disconnected';
         const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const streamError = lastDisconnect?.error?.message || '';
+        const isStreamError = streamError.includes('515') || streamError.includes('stream');
 
-        if (statusCode === DisconnectReason.loggedOut) {
+        if (isStreamError) {
+          logger.error('Stream error 515 — clearing session for fresh QR');
+          try {
+            await redis?.del('waifu:auth:creds');
+            await redis?.del('waifu:auth:keys');
+          } catch (e) {
+            logger.warn({ e }, 'Failed to clear auth on stream error');
+          }
+        } else if (statusCode === DisconnectReason.loggedOut) {
           logger.error('WhatsApp logged out — clearing auth keys');
           try {
             await redis?.del('waifu:auth:creds');
