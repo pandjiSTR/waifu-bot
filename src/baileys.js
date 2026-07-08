@@ -86,6 +86,10 @@ export async function connectToWhatsApp() {
     version,
     logger,
     printQRInTerminal: false,
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
+    browser: ['Ara (Chrome)', '', ''],
+    query: { useCachedResponse: true },
   });
 
   sock = newSock;
