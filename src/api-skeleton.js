@@ -627,6 +627,33 @@ export async function handleGetMessages(req, res) {
 }
 
 // ──────────────────────────────────────────────
+// QR / Pairing endpoints
+// ──────────────────────────────────────────────
+
+/**
+ * GET /api/auth/qr
+ * Public (no auth) — returns the current QR code string for WhatsApp pairing,
+ * or a 404 if no QR is available yet.
+ */
+export async function handleGetQR(req, res) {
+  try {
+    if (!req.redis) {
+      json(res, 503, { error: 'Redis unavailable — cannot retrieve QR' });
+      return;
+    }
+    const qr = await req.redis.get('waifu:qr');
+    if (qr) {
+      json(res, 200, { qr, message: 'Scan this QR code with WhatsApp' });
+    } else {
+      json(res, 404, { qr: null, message: 'No QR code available yet — wait for connection' });
+    }
+  } catch (err) {
+    logger.error({ err }, 'Get QR handler error');
+    json(res, 500, { error: 'Internal server error' });
+  }
+}
+
+// ──────────────────────────────────────────────
 // Friend Memory endpoints
 // ──────────────────────────────────────────────
 
@@ -711,6 +738,9 @@ export async function handleClearFriendMemory(req, res) {
  */
 export function registerApiRoutes(router, requireAuth) {
   // Public routes (no auth)
+  // QR code endpoint (public — needed for pairing before auth)
+  router.get('/api/auth/qr', handleGetQR);
+
   router.get('/api/health', handleHealth);
 
   // Auth routes (handled separately in index.js but registered here for routing)
