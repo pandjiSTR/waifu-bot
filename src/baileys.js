@@ -1,8 +1,10 @@
 import makeWASocket, {
   DisconnectReason,
   isJidGroup,
+  fetchLatestBaileysVersion,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
+import qrcode from 'qrcode-terminal';
 import { shouldProcess, processLLM, extractText } from './pipeline.js';
 import { useRedisAuthState } from './baileys-auth.js';
 
@@ -22,10 +24,14 @@ export async function initWhatsApp(redis) {
     }
 
     const { state, saveCreds } = await useRedisAuthState(redis);
+    const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
       auth: state,
+      version,
       logger,
+      syncFullHistory: false,
+      markOnlineOnConnect: false,
     });
 
     connectionState = 'connecting';
@@ -33,16 +39,14 @@ export async function initWhatsApp(redis) {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
-      const { connection, qr, lastDisconnect } = update;
+      const { connection, lastDisconnect, qr } = update;
 
-      if (qr) {
+      if (qr && !state?.creds?.registered) {
         try {
           await redis?.set('waifu:qr', qr, 300);
-          console.log('QR_CODE:', qr);
-        } catch {
-          // non-fatal
-        }
-        logger.info('QR code received — scan with WhatsApp to pair');
+        } catch {}
+        console.log('\nScan QR ini dengan WhatsApp:\n');
+        qrcode.generate(qr, { small: true });
       }
 
       if (connection === 'open') {
@@ -51,15 +55,14 @@ export async function initWhatsApp(redis) {
       } else if (connection === 'close') {
         connectionState = 'disconnected';
         const statusCode = lastDisconnect?.error?.output?.statusCode;
+
         if (statusCode === DisconnectReason.loggedOut) {
-          logger.error(
-            'WhatsApp logged out — clearing Redis auth keys; re-pair on next start'
-          );
+          logger.error('WhatsApp logged out — clearing auth keys');
           try {
             await redis?.del('waifu:auth:creds');
             await redis?.del('waifu:auth:keys');
           } catch (e) {
-            logger.warn({ e }, 'Failed to clear Redis auth keys on logout');
+            logger.warn({ e }, 'Failed to clear auth keys');
           }
         } else {
           logger.warn('WhatsApp connection closed — baileys will auto-reconnect');
@@ -79,21 +82,16 @@ export async function initWhatsApp(redis) {
 
           const isGroup = isJidGroup(m.key.remoteJid);
           const ctx = {
-            sock,
-            redis,
-            jid: m.key.remoteJid,
-            isGroup,
+            sock, redis,
+            jid: m.key.remoteJid, isGroup,
             sender: m.key.participant || m.key.remoteJid,
-            message: m,
-            body,
-            messageId: m.key.id,
+            message: m, body, messageId: m.key.id,
           };
 
           if (!(await shouldProcess(body, ctx))) continue;
 
           await processLLM(body, ctx).catch((err) =>
-            logger.error({ err }, 'processLLM failed')
-          );
+            logger.error({ err }, 'processLLM failed'));
         } catch (err) {
           logger.error({ err }, 'messages.upsert handler error');
         }
@@ -103,11 +101,7 @@ export async function initWhatsApp(redis) {
     const stop = async () => {
       try {
         sock.ev.removeAllListeners();
-        if (typeof sock.end === 'function') {
-          await sock.end();
-        } else {
-          sock.ws?.close?.();
-        }
+        typeof sock.end === 'function' ? await sock.end() : sock.ws?.close?.();
       } catch (err) {
         logger.warn({ err }, 'WhatsApp stop error');
       } finally {
@@ -117,7 +111,7 @@ export async function initWhatsApp(redis) {
 
     return { sock, stop };
   } catch (err) {
-    logger.error({ err }, 'initWhatsApp failed — continuing without WhatsApp');
+    logger.error({ err }, 'initWhatsApp failed');
     return { sock: null, stop: async () => {} };
   }
 }
