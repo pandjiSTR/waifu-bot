@@ -49,7 +49,7 @@ const sock = makeWASocket({
       // Pairing code: when socket connects and creds aren't registered yet,
       // request a pairing code for the owner number.
       if (connection === 'open' && !sock.authState?.creds?.registered) {
-        const number = process.env.OWNER_NUMBER?.split(',')?.[0]?.trim();
+        const number = process.env.BOT_NUMBER?.trim();
         if (number) {
           try {
             const code = await sock.requestPairingCode(number);
