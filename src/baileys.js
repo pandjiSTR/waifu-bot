@@ -8,33 +8,22 @@ import { useRedisAuthState } from './baileys-auth.js';
 
 const logger = pino({ name: 'baileys', level: process.env.LOG_LEVEL || 'warn' });
 
-// Module-level connection state surfaced to /api/health via getConnectionState().
 let connectionState = 'disconnected';
 
 export function getConnectionState() {
   return connectionState;
 }
 
-/**
- * Initialize the WhatsApp socket and wire event handlers.
- * @param {object|null} redis // may be null
- * @returns {Promise<{ sock: object|null, stop: () => Promise<void> }>}
- */
 export async function initWhatsApp(redis) {
   try {
-    // Redis is required to persist the WhatsApp session. If unavailable, fail
-    // hard: no WhatsApp, but the HTTP server still boots (graceful degradation).
     if (!redis) {
       logger.error('Redis unavailable — WhatsApp disabled');
       return { sock: null, stop: async () => {} };
     }
 
-    // Session now persists across deploys via Redis (waifu:auth:* keys), so no
-    // local .wa-auth folder is used. Socket is only opened inside this function;
-    // importing this module remains side-effect free.
     const { state, saveCreds } = await useRedisAuthState(redis);
 
-const sock = makeWASocket({
+    const sock = makeWASocket({
       auth: state,
       logger,
     });
@@ -46,34 +35,12 @@ const sock = makeWASocket({
     sock.ev.on('connection.update', async (update) => {
       const { connection, qr, lastDisconnect } = update;
 
-      // Pairing code: when socket connects and creds aren't registered yet,
-      // request a pairing code for the owner number.
-      if (connection === 'open') {
-        logger.info('WhatsApp socket opened (connection=open)');
-        if (!sock.authState?.creds?.registered) {
-          logger.info('creds not registered — requesting pairing code');
-          const number = process.env.BOT_NUMBER?.trim();
-          if (number) {
-            try {
-              const code = await sock.requestPairingCode(number);
-              console.log('PAIRING_CODE:', code);
-              logger.info({ number }, 'Pairing code generated');
-            } catch (err) {
-              logger.warn({ err }, 'Pairing code request failed');
-            }
-          } else {
-            logger.warn('BOT_NUMBER not set — cannot request pairing code');
-          }
-        } else {
-          logger.info('creds already registered — skipping pairing');
-        }
-      }
-
       if (qr) {
         try {
           await redis?.set('waifu:qr', qr, 300);
+          console.log('QR_CODE:', qr);
         } catch {
-          // non-fatal: QR is also printed to terminal
+          // non-fatal
         }
         logger.info('QR code received — scan with WhatsApp to pair');
       }
@@ -101,15 +68,14 @@ const sock = makeWASocket({
     });
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      // Only live incoming messages; ignore history appends / status events.
       if (type !== 'notify') return;
 
       for (const m of messages) {
         try {
-          if (m.key.fromMe) continue; // echoes already filtered by shouldProcess too
+          if (m.key.fromMe) continue;
 
           const body = extractText(m);
-          if (!body) continue; // Fase 3 ignores non-text (media handled later)
+          if (!body) continue;
 
           const isGroup = isJidGroup(m.key.remoteJid);
           const ctx = {
@@ -125,7 +91,6 @@ const sock = makeWASocket({
 
           if (!(await shouldProcess(body, ctx))) continue;
 
-          // Fire-and-forget: one bad message must never crash the socket.
           await processLLM(body, ctx).catch((err) =>
             logger.error({ err }, 'processLLM failed')
           );
@@ -152,7 +117,6 @@ const sock = makeWASocket({
 
     return { sock, stop };
   } catch (err) {
-    // Graceful degradation: HTTP server still boots without WhatsApp.
     logger.error({ err }, 'initWhatsApp failed — continuing without WhatsApp');
     return { sock: null, stop: async () => {} };
   }
