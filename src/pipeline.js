@@ -210,10 +210,8 @@ export async function shouldProcess(body, ctx) {
   }
 
   // Fire-and-forget Redis instrumentation (never blocks the pipeline).
-  if (ctx.redis) {
-    const now = Date.now();
+if (ctx.redis) {
     ctx.redis.hincrby('waifu:stats:messages', 'total', 1).catch(() => {});
-    ctx.redis.zadd('waifu:stats:friends', now, ctx.sender).catch(() => {});
     ctx.redis.hincrby('waifu:stats:friends', ctx.sender, 1).catch(() => {});
     const hourKey = 'waifu:stats:hourly:' + new Date().toISOString().slice(0, 13) + ':00';
     ctx.redis.zincrby(hourKey, 1, 'msg').catch(() => {});

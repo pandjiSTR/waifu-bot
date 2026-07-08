@@ -24,7 +24,6 @@ let stabilityTimer = null;
 
 const MAX_BACKOFF_MS = 60000;
 const MAX_RECONNECT_ATTEMPTS = 10;
-const SESSION_STABILIZE_MS = 3000;
 
 export function getConnectionState() {
   return connectionState;
@@ -36,9 +35,9 @@ async function clearRedisAuth() {
     // Also clean up individual key-store keys
     let cursor = '0';
     do {
-      const [nextCursor, keys] = await redis?.scan(cursor, 'MATCH', 'waifu:auth:*');
+      const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'waifu:auth:*');
       cursor = nextCursor;
-      if (keys?.length) await redis?.del(...keys);
+      if (keys?.length) await redis.del(...keys);
     } while (cursor !== '0');
   } catch (e) {
     logger.warn({ e }, 'Failed to clear auth keys');
@@ -103,7 +102,9 @@ export async function connectToWhatsApp() {
     if (qr) {
       try {
         await redis?.set('waifu:qr', qr, 300);
-      } catch {}
+      } catch (e) {
+          logger.warn({ err: e }, 'Failed to save QR to Redis');
+        }
       console.log('\nScan QR ini dengan WhatsApp:\n');
       qrcode.generate(qr, { small: true });
     }
@@ -134,6 +135,14 @@ export async function connectToWhatsApp() {
         logger.error('Logged out — clearing session');
         await clearRedisAuth();
         reconnectWithBackoff();
+        return;
+      }
+
+      if (statusCode === 408) {
+        logger.warn('Init query timed out (408) — ignoring, connection will remain active');
+        connectionState = 'connected';
+        clearTimeout(stabilityTimer);
+        stabilityTimer = setTimeout(() => { reconnectAttempt = 0; }, 5000);
         return;
       }
 
