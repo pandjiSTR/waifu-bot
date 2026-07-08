@@ -36,7 +36,6 @@ export async function initWhatsApp(redis) {
 
     const sock = makeWASocket({
       auth: state,
-      printQRInTerminal: process.env.WA_PRINT_QR !== 'false',
       logger, // quiet pino adapter; baileys' verbose info/debug are suppressed
     });
 

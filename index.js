@@ -74,6 +74,10 @@ class Router {
     this.routes.push({ method: 'PUT', path, handlers: handlers.filter(Boolean) });
   }
 
+  delete(path, ...handlers) {
+    this.routes.push({ method: 'DELETE', path, handlers: handlers.filter(Boolean) });
+  }
+
   /**
    * Match a request to a route.
    * Returns { params, handlers } or null.
