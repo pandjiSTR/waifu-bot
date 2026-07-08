@@ -277,6 +277,9 @@ export async function main() {
       return;
     }
 
+    // HEAD: treat as GET internally, strip body at the end
+    const isHead = req.method === 'HEAD';
+
     // Parse URL
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = url.pathname;
@@ -287,7 +290,9 @@ export async function main() {
         // Inject redis into request for handlers to use
         req.redis = redis;
 
-        const route = router.match(req.method, pathname);
+        // Treat HEAD as GET for route matching (UptimeRobot uses HEAD)
+        const routeMethod = req.method === 'HEAD' ? 'GET' : req.method;
+        const route = router.match(routeMethod, pathname);
 
         if (!route) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -313,6 +318,11 @@ export async function main() {
         };
 
         await runHandlers(0);
+
+        // HEAD requests must return no body (but still route via GET)
+        if (req.method === 'HEAD' && !res.writableEnded) {
+          res.end();
+        }
         return;
       }
 
