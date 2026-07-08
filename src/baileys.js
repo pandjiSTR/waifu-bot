@@ -12,12 +12,20 @@ import { useRedisAuthState } from './baileys-auth.js';
 const logger = pino({ name: 'baileys', level: process.env.LOG_LEVEL || 'warn' });
 
 let connectionState = 'disconnected';
+let sock = null;
+let redis = null;
+let isShuttingDown = false;
+let stopSocket = null;
 
 export function getConnectionState() {
   return connectionState;
 }
 
-async function clearRedisAuth(redis) {
+export function getSock() {
+  return sock;
+}
+
+async function clearRedisAuth() {
   try {
     await redis?.del('waifu:auth:creds');
     await redis?.del('waifu:auth:keys');
@@ -27,119 +35,113 @@ async function clearRedisAuth(redis) {
   }
 }
 
-export async function initWhatsApp(redis) {
-  try {
-    if (!redis) {
-      logger.error('Redis unavailable — WhatsApp disabled');
-      return { sock: null, stop: async () => {} };
-    }
+export async function connectToWhatsApp() {
+  if (isShuttingDown) return;
 
-    const { state, saveCreds } = await useRedisAuthState(redis);
-    const { version } = await fetchLatestBaileysVersion();
+  const { state, saveCreds } = await useRedisAuthState(redis);
+  const { version } = await fetchLatestBaileysVersion();
 
-    if (!state.creds.registered) {
-      logger.info('No registered session found — will show QR');
-      await redis.set('waifu:qr:status', 'ready');
-    }
+  const newSock = makeWASocket({
+    auth: state,
+    version,
+    logger,
+    syncFullHistory: false,
+    markOnlineOnConnect: false,
+  });
 
-    const sock = makeWASocket({
-      auth: state,
-      version,
-      logger,
-      syncFullHistory: false,
-      markOnlineOnConnect: false,
-    });
+  sock = newSock;
+  connectionState = 'connecting';
 
-    connectionState = 'connecting';
+  newSock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('creds.update', saveCreds);
+  newSock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
-    let qrEmitted = false;
-
-    sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
-
-      if (qr && !state?.creds?.registered) {
-        qrEmitted = true;
-        try {
-          await redis?.set('waifu:qr', qr, 300);
-        } catch {}
-        console.log('\nScan QR ini dengan WhatsApp:\n');
-        qrcode.generate(qr, { small: true });
-      }
-
-      if (connection === 'open') {
-        connectionState = 'connected';
-        logger.info('WhatsApp connected');
-      } else if (connection === 'close') {
-        connectionState = 'disconnected';
-        if (qrEmitted) {
-          logger.warn('Close after QR — ignoring, QR already sent');
-          return;
-        }
-        const statusCode = lastDisconnect?.error
-          ? new Boom(lastDisconnect?.error)?.output?.statusCode
-          : undefined;
-
-        const needsReinit =
-          statusCode === 440 ||
-          statusCode === 500 ||
-          statusCode === 515 ||
-          statusCode === DisconnectReason.loggedOut;
-
-        if (needsReinit) {
-          logger.error({ statusCode }, 'Auth invalid — clearing session for fresh QR');
-          await clearRedisAuth(redis);
-          logger.info('Exiting process — Render will restart with fresh auth');
-          setTimeout(() => process.exit(1), 500);
-        } else {
-          logger.warn({ statusCode }, 'WhatsApp connection closed — baileys will auto-reconnect');
-        }
-      }
-    });
-
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      if (type !== 'notify') return;
-
-      for (const m of messages) {
-        try {
-          if (m.key.fromMe) continue;
-
-          const body = extractText(m);
-          if (!body) continue;
-
-          const isGroup = isJidGroup(m.key.remoteJid);
-          const ctx = {
-            sock, redis,
-            jid: m.key.remoteJid, isGroup,
-            sender: m.key.participant || m.key.remoteJid,
-            message: m, body, messageId: m.key.id,
-          };
-
-          if (!(await shouldProcess(body, ctx))) continue;
-
-          await processLLM(body, ctx).catch((err) =>
-            logger.error({ err }, 'processLLM failed'));
-        } catch (err) {
-          logger.error({ err }, 'messages.upsert handler error');
-        }
-      }
-    });
-
-    const stop = async () => {
+    if (qr && !state?.creds?.registered) {
       try {
-        sock.ev.removeAllListeners();
-        typeof sock.end === 'function' ? await sock.end() : sock.ws?.close?.();
-      } catch (err) {
-        logger.warn({ err }, 'WhatsApp stop error');
-      } finally {
-        connectionState = 'disconnected';
-      }
-    };
+        await redis?.set('waifu:qr', qr, 300);
+      } catch {}
+      console.log('\nScan QR ini dengan WhatsApp:\n');
+      qrcode.generate(qr, { small: true });
+    }
 
-    return { sock, stop };
-  } catch (err) {
-    logger.error({ err }, 'initWhatsApp failed');
-    return { sock: null, stop: async () => {} };
-  }
+    if (connection === 'open') {
+      connectionState = 'connected';
+      logger.info('WhatsApp connected');
+    } else if (connection === 'close') {
+      connectionState = 'disconnected';
+      const statusCode = lastDisconnect?.error
+        ? new Boom(lastDisconnect?.error)?.output?.statusCode
+        : undefined;
+
+      const needsReinit =
+        statusCode === 440 ||
+        statusCode === 500 ||
+        statusCode === 515 ||
+        statusCode === DisconnectReason.loggedOut;
+
+      if (needsReinit) {
+        logger.error({ statusCode }, 'Auth invalid — clearing session and reconnecting');
+        await clearRedisAuth();
+        setTimeout(() => connectToWhatsApp(), 1000);
+      } else {
+        logger.warn({ statusCode }, 'WhatsApp connection closed — reconnecting');
+        setTimeout(() => connectToWhatsApp(), 2000);
+      }
+    }
+  });
+
+  newSock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+
+    for (const m of messages) {
+      try {
+        if (m.key.fromMe) continue;
+
+        const body = extractText(m);
+        if (!body) continue;
+
+        const isGroup = isJidGroup(m.key.remoteJid);
+        const ctx = {
+          sock: newSock, redis,
+          jid: m.key.remoteJid, isGroup,
+          sender: m.key.participant || m.key.remoteJid,
+          message: m, body, messageId: m.key.id,
+        };
+
+        if (!(await shouldProcess(body, ctx))) continue;
+
+        await processLLM(body, ctx).catch((err) =>
+          logger.error({ err }, 'processLLM failed'));
+      } catch (err) {
+        logger.error({ err }, 'messages.upsert handler error');
+      }
+    }
+  });
+
+  stopSocket = async () => {
+    try {
+      newSock.ev.removeAllListeners();
+      typeof newSock.end === 'function' ? await newSock.end() : newSock.ws?.close?.();
+    } catch (err) {
+      logger.warn({ err }, 'WhatsApp stop error');
+    }
+    if (sock === newSock) sock = null;
+  };
+
+  return newSock;
+}
+
+// Legacy wrapper for backward compatibility
+export async function initWhatsApp(redisClient) {
+  redis = redisClient;
+  const waSock = await connectToWhatsApp();
+  return {
+    sock: waSock,
+    stop: async () => {
+      isShuttingDown = true;
+      await stopSocket?.();
+      connectionState = 'disconnected';
+    },
+  };
 }
