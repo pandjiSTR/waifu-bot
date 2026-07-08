@@ -15,24 +15,64 @@ let connectionState = 'disconnected';
 let sock = null;
 let redis = null;
 let isShuttingDown = false;
-let stopSocket = null;
+let isReconnecting = false;
+let reconnectAttempt = 0;
+let consecutive440 = 0;
+let consecutive500 = 0;
+let stopReconnect440 = false;
+let stabilityTimer = null;
+
+const MAX_BACKOFF_MS = 60000;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const SESSION_STABILIZE_MS = 3000;
 
 export function getConnectionState() {
   return connectionState;
 }
 
-export function getSock() {
-  return sock;
-}
-
 async function clearRedisAuth() {
   try {
     await redis?.del('waifu:auth:creds');
-    await redis?.del('waifu:auth:keys');
-    logger.info('Redis auth cleared');
+    // Also clean up individual key-store keys
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await redis?.scan(cursor, 'MATCH', 'waifu:auth:*');
+      cursor = nextCursor;
+      if (keys?.length) await redis?.del(...keys);
+    } while (cursor !== '0');
   } catch (e) {
     logger.warn({ e }, 'Failed to clear auth keys');
   }
+}
+
+function reconnectWithBackoff() {
+  if (isReconnecting) return;
+  if (stopReconnect440) return;
+  isReconnecting = true;
+
+  reconnectAttempt += 1;
+
+  if (reconnectAttempt > MAX_RECONNECT_ATTEMPTS) {
+    logger.warn('Reconnect failed 10x — waiting 5 minutes');
+    setTimeout(() => {
+      reconnectAttempt = 0;
+      isReconnecting = false;
+      reconnectWithBackoff();
+    }, 5 * 60 * 1000);
+    return;
+  }
+
+  const delay = Math.min(1000 * 2 ** reconnectAttempt, MAX_BACKOFF_MS);
+
+  setTimeout(async () => {
+    try {
+      await connectToWhatsApp();
+    } catch (err) {
+      logger.error({ err }, 'Reconnect failed');
+      isReconnecting = false;
+      reconnectWithBackoff();
+    }
+  }, delay);
 }
 
 export async function connectToWhatsApp() {
@@ -45,8 +85,7 @@ export async function connectToWhatsApp() {
     auth: state,
     version,
     logger,
-    syncFullHistory: false,
-    markOnlineOnConnect: false,
+    printQRInTerminal: false,
   });
 
   sock = newSock;
@@ -57,7 +96,7 @@ export async function connectToWhatsApp() {
   newSock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
-    if (qr && !state?.creds?.registered) {
+    if (qr) {
       try {
         await redis?.set('waifu:qr', qr, 300);
       } catch {}
@@ -68,26 +107,66 @@ export async function connectToWhatsApp() {
     if (connection === 'open') {
       connectionState = 'connected';
       logger.info('WhatsApp connected');
-    } else if (connection === 'close') {
+      isReconnecting = false;
+      consecutive500 = 0;
+      consecutive440 = 0;
+      clearTimeout(stabilityTimer);
+      stabilityTimer = setTimeout(() => {
+        reconnectAttempt = 0;
+      }, 30000);
+      return;
+    }
+
+    if (connection === 'close') {
       connectionState = 'disconnected';
-      const statusCode = lastDisconnect?.error
-        ? new Boom(lastDisconnect?.error)?.output?.statusCode
-        : undefined;
+      const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
 
-      const needsReinit =
-        statusCode === 440 ||
-        statusCode === 500 ||
-        statusCode === 515 ||
-        statusCode === DisconnectReason.loggedOut;
+      isReconnecting = false;
 
-      if (needsReinit) {
-        logger.error({ statusCode }, 'Auth invalid — clearing session and reconnecting');
+      if (isShuttingDown) return;
+
+      if (isLoggedOut) {
+        logger.error('Logged out — clearing session');
         await clearRedisAuth();
-        setTimeout(() => connectToWhatsApp(), 1000);
-      } else {
-        logger.warn({ statusCode }, 'WhatsApp connection closed — reconnecting');
-        setTimeout(() => connectToWhatsApp(), 2000);
+        reconnectWithBackoff();
+        return;
       }
+
+      if (statusCode === 440) {
+        consecutive440 += 1;
+        if (consecutive440 >= 5) {
+          logger.error('5x 440 consecutive — auth conflict, clearing session');
+          stopReconnect440 = true;
+          clearTimeout(stabilityTimer);
+          await clearRedisAuth();
+          setTimeout(() => {
+            stopReconnect440 = false;
+            consecutive440 = 0;
+          }, 30 * 1000);
+          return;
+        }
+        reconnectWithBackoff();
+        return;
+      }
+
+      consecutive440 = 0;
+
+      if (statusCode === 500) {
+        consecutive500 += 1;
+      } else {
+        consecutive500 = 0;
+      }
+
+      if (consecutive500 >= 3) {
+        logger.error('3x 500 consecutive — auth corrupted, clearing session');
+        consecutive500 = 0;
+        await clearRedisAuth();
+        reconnectWithBackoff();
+        return;
+      }
+
+      reconnectWithBackoff();
     }
   });
 
@@ -118,29 +197,21 @@ export async function connectToWhatsApp() {
       }
     }
   });
-
-  stopSocket = async () => {
-    try {
-      newSock.ev.removeAllListeners();
-      typeof newSock.end === 'function' ? await newSock.end() : newSock.ws?.close?.();
-    } catch (err) {
-      logger.warn({ err }, 'WhatsApp stop error');
-    }
-    if (sock === newSock) sock = null;
-  };
-
-  return newSock;
 }
 
-// Legacy wrapper for backward compatibility
 export async function initWhatsApp(redisClient) {
   redis = redisClient;
-  const waSock = await connectToWhatsApp();
+  await connectToWhatsApp();
   return {
-    sock: waSock,
+    sock,
     stop: async () => {
       isShuttingDown = true;
-      await stopSocket?.();
+      try {
+        sock?.ev?.removeAllListeners();
+        typeof sock?.end === 'function' ? await sock.end() : sock?.ws?.close?.();
+      } catch (err) {
+        logger.warn({ err }, 'WhatsApp stop error');
+      }
       connectionState = 'disconnected';
     },
   };

@@ -1,88 +1,54 @@
-import pino from 'pino';
-import {
-  initAuthCreds,
-  makeCacheableSignalKeyStore,
-  BufferJSON,
-  proto,
-} from '@whiskeysockets/baileys';
+import { initAuthCreds, BufferJSON, proto } from '@whiskeysockets/baileys'
 
-const logger = pino({ name: 'baileys-auth', level: process.env.LOG_LEVEL || 'warn' });
+const PREFIX = 'waifu:auth:'
 
-// Redis keys for the WhatsApp auth state (PRD §7 waifu:auth:*).
-const CREDS_KEY = 'waifu:auth:creds';
-const KEYS_HASH = 'waifu:auth:keys';
-
-/**
- * Build a baileys AuthenticationState backed by Redis.
- *
- * The WhatsApp session now persists across deploys via Redis instead of local
- * disk (which resets on every Render deploy). Requires a connected Redis client.
- *
- * @param {object} redis  // raw ioredis client (from createRedisClient)
- * @returns {Promise<{ state: {creds:object, keys:object}, saveCreds: () => Promise<void> }>}
- * @throws {Error} when redis is null/falsy (session cannot be persisted)
- */
 export async function useRedisAuthState(redis) {
-  if (!redis) {
-    throw new Error('Redis required for WhatsApp auth state');
+  const readData = async (id) => {
+    const raw = await redis.get(`${PREFIX}${id}`)
+    if (!raw) return null
+    return JSON.parse(raw, BufferJSON.reviver)
   }
 
-  // Load persisted creds, or start fresh.
-  let creds;
-  try {
-    const raw = await redis.get(CREDS_KEY);
-    creds = raw ? JSON.parse(raw, BufferJSON.reviver) : initAuthCreds();
-  } catch (err) {
-    logger.warn({ err }, 'Failed to load creds from Redis — initializing new');
-    creds = initAuthCreds();
+  const writeData = async (data, id) => {
+    await redis.set(`${PREFIX}${id}`, JSON.stringify(data, BufferJSON.replacer))
   }
 
-  // Redis-backed SignalKeyStore (Redis is the source of truth).
-  const redisStore = {
-    async get(type, ids) {
-      const data = {};
-      await Promise.all(
-        ids.map(async (id) => {
-          const field = `${type}:${id}`;
-          const raw = await redis.hget(KEYS_HASH, field);
-          if (!raw) return;
-          let value = JSON.parse(raw, BufferJSON.reviver);
-          if (type === 'app-state-sync-key') {
-            value = proto.Message.AppStateSyncKeyData.fromObject(value);
-          }
-          data[id] = value;
-        })
-      );
-      return data;
-    },
-    async set(data) {
-      for (const type of Object.keys(data)) {
-        const entries = data[type];
-        for (const id of Object.keys(entries)) {
-          const field = `${type}:${id}`;
-          const value = entries[id];
-          if (value) {
-            await redis.hset(KEYS_HASH, field, JSON.stringify(value, BufferJSON.replacer));
-          } else {
-            await redis.hdel(KEYS_HASH, field);
-          }
-        }
-      }
-    },
-  };
+  const removeData = async (id) => {
+    await redis.del(`${PREFIX}${id}`)
+  }
 
-  // Wrap with an in-process cache for speed; Redis remains source of truth.
-  const keys = makeCacheableSignalKeyStore(redisStore, logger);
+  const creds = (await readData('creds')) || initAuthCreds()
 
   return {
-    state: { creds, keys },
-    saveCreds: async () => {
-      try {
-        await redis.set(CREDS_KEY, JSON.stringify(creds, BufferJSON.replacer));
-      } catch (err) {
-        logger.error({ err }, 'Failed to save creds to Redis');
-        throw err;
-      }
+    state: {
+      creds,
+      keys: {
+        get: async (type, ids) => {
+          const data = {}
+          await Promise.all(ids.map(async (id) => {
+            let value = await readData(`${type}-${id}`)
+            if (type === 'app-state-sync-key' && value) {
+              value = proto.Message.AppStateSyncKeyData.fromObject(value)
+            }
+            data[id] = value
+          }))
+          return data
+        },
+        set: async (data) => {
+          const tasks = []
+          for (const category in data) {
+            for (const id in data[category]) {
+              const value = data[category][id]
+              const key = `${category}-${id}`
+              tasks.push(value ? writeData(value, key) : removeData(key))
+            }
+          }
+          await Promise.all(tasks)
+        },
+      },
     },
-  };
+    saveCreds: async () => {
+      await writeData(creds, 'creds')
+    },
+  }
 }
