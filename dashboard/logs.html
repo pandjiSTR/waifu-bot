@@ -1,0 +1,66 @@
+<!-- Logs page fragment -->
+<div class="page-fragment">
+<style>
+/* ─── Logs page styles ──────────────────────────────────── */
+.logs-filter-bar { margin-bottom: 1rem; padding: 0.85rem 1.25rem; }
+.logs-filter-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.logs-filter-left { display: flex; align-items: center; gap: 0.75rem; }
+.logs-filter-label { font-family: var(--font-mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gray); font-weight: 600; }
+.logs-select { font-family: var(--font-mono); font-size: 0.75rem; padding: 0.4rem 0.6rem; border: 2px solid var(--black); background: var(--white); color: var(--black); cursor: pointer; outline: none; border-radius: 0; min-width: 120px; }
+.logs-select:focus { box-shadow: 3px 3px 0 var(--black); }
+.logs-select optgroup, .logs-select option { font-family: var(--font-mono); }
+
+.logs-table-wrap { overflow-x: auto; padding: 0; }
+.logs-table { width: 100%; border-collapse: collapse; font-family: var(--font-body); font-size: 0.8rem; }
+.logs-table thead { background: var(--black); color: var(--white); }
+.logs-table th { font-family: var(--font-mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; padding: 0.75rem 1rem; text-align: left; font-weight: 600; }
+.logs-table td { padding: 0.6rem 1rem; border-bottom: 1px solid rgba(0,0,0,0.08); vertical-align: top; }
+.logs-table tbody tr:hover { background: rgba(0,0,0,0.03); }
+.logs-table tbody tr:last-child td { border-bottom: none; }
+.logs-time { font-family: var(--font-mono); font-size: 0.7rem; white-space: nowrap; color: var(--gray); }
+.logs-level { font-weight: 700; text-transform: uppercase; font-size: 0.7rem; white-space: nowrap; letter-spacing: 0.5px; }
+.logs-level--error { color: var(--black); }
+.logs-level--warn  { color: #555555; }
+.logs-level--info  { color: #999999; }
+.logs-msg { font-family: var(--font-mono); font-size: 0.75rem; word-break: break-word; }
+
+@media (max-width: 600px) {
+  .logs-table th:nth-child(1), .logs-table td:nth-child(1) { display: none; }
+  .logs-table th, .logs-table td { padding: 0.5rem 0.6rem; font-size: 0.7rem; }
+}
+</style>
+
+<div class="section-header">
+  <h2>System Logs</h2>
+  <span class="badge" id="logs-badge">auto-refresh 10s</span>
+</div>
+
+<div class="panel logs-filter-bar">
+  <div class="logs-filter-row">
+    <div class="logs-filter-left">
+      <span class="logs-filter-label">Level</span>
+      <select class="logs-select" id="logs-level">
+        <option value="all">All</option>
+        <option value="error">Error</option>
+        <option value="warn">Warn</option>
+        <option value="info">Info</option>
+      </select>
+    </div>
+    <button class="btn-sm" id="logs-clear-btn">Clear Logs</button>
+  </div>
+</div>
+
+<div class="panel logs-table-wrap">
+  <table class="logs-table" id="logs-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Level</th>
+        <th>Message</th>
+      </tr>
+    </thead>
+    <tbody id="logs-tbody"></tbody>
+  </table>
+  <div class="empty-panel hidden" id="logs-empty">Belum ada log</div>
+</div>
+</div>

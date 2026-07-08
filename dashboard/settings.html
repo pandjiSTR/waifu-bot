@@ -1,0 +1,50 @@
+<!-- Settings page fragment -->
+<div class="settings-grid">
+  <div>
+    <div class="panel settings-section">
+      <h3>Personality</h3>
+      <div class="field-group">
+        <label for="settings-personality">personality.txt</label>
+        <textarea id="settings-personality" placeholder="Memuat personality.txt..."></textarea>
+      </div>
+      <button class="btn btn-primary" id="save-personality-btn">Simpan Personality</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel settings-section">
+      <h3>Konfigurasi</h3>
+      <div class="toggles-group">
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Auto-Chat</div>
+            <div class="toggle-desc">Ara mengirim pesan proaktif ke Owner</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-autochat" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Circuit Breaker</div>
+            <div class="toggle-desc">Cooldown otomatis saat error beruntun</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-circuitbreaker" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel settings-section">
+      <h3>Blacklist</h3>
+      <div class="field-group">
+        <label for="settings-blacklist">Nomor yang diblokir (comma-separated)</label>
+        <input type="text" id="settings-blacklist" placeholder="62812xxxx, 62813xxxx">
+        <p class="field-hint">Kosongkan agar semua nomor bisa mengakses Ara</p>
+      </div>
+    </div>
+  </div>
+</div>

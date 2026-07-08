@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ara -- Personal AI Chatbot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+<style>
+/* ─── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --black: #000000;
+  --white: #ffffff;
+  --dark-bg: #ffffff;
+  --light-bg: #f5f5f5;
+  --panel-bg: #ffffff;
+  --gray: #1a1a1a;
+  --gray-light: #444444;
+  --gray-faint: #777777;
+  --border-w: 3px;
+  --font-display: 'Archivo Black', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--light-bg);
+  color: var(--black);
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--light-bg); }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+.hidden { display: none !important; }
+
+/* ─── Login Shell ──────────────────────────────────────────── */
+#login-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--dark-bg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Screentone-style bg pattern */
+#login-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.025) 2px,
+      rgba(0,0,0,0.025) 4px
+    );
+  pointer-events: none;
+}
+
+.login-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 400px;
+  background: var(--white);
+  border: var(--border-w) solid var(--black);
+  padding: 2.5rem 2rem;
+  box-shadow: 8px 8px 0 var(--black);
+}
+
+/* Manga corner accents */
+.login-card::before,
+.login-card::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--black);
+}
+.login-card::before {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+}
+.login-card::after {
+  bottom: -2px;
+  right: -2px;
+  border-left: none;
+  border-top: none;
+}
+
+.login-logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
+
+.login-logo img {
+  width: 80px;
+  height: auto;
+  display: block;
+}
+
+.login-title {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  text-align: center;
+  color: var(--black);
+  letter-spacing: 4px;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.login-subtitle {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-bottom: 2rem;
+  font-weight: 500;
+}
+
+.login-divider {
+  height: var(--border-w);
+  background: var(--black);
+  margin-bottom: 1.5rem;
+  border: none;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--gray);
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.form-group input {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--black);
+  background: var(--white);
+  border: 2px solid var(--black);
+  border-radius: 0;
+  outline: none;
+  transition: box-shadow 0.15s;
+}
+
+.form-group input:focus {
+  box-shadow: 4px 4px 0 var(--black);
+}
+
+.form-group input::placeholder {
+  color: var(--gray-faint);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.85rem 1.5rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: 2px solid var(--black);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--black);
+  color: var(--white);
+  box-shadow: 4px 4px 0 var(--black);
+}
+
+.btn-primary:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--black);
+}
+
+.btn-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--black);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 4px 4px 0 var(--black);
+}
+
+.login-footer {
+  margin-top: 2rem;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--gray);
+  letter-spacing: 1px;
+}
+
+/* ─── App Shell ────────────────────────────────────────────── */
+#app-shell {
+  min-height: 100vh;
+}
+
+/* ─── Layout ──────────────────────────────────────────────── */
+#layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ─── Sidebar ─────────────────────────────────────────────── */
+#sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: var(--white);
+  border-right: var(--border-w) solid var(--black);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 200;
+}
+
+.sidebar-header {
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: var(--border-w) solid var(--black);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.sidebar-logo {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.sidebar-brand {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-brand-name {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: 3px;
+  line-height: 1;
+  margin-bottom: 0.15rem;
+  color: var(--black);
+}
+
+.sidebar-brand-sub {
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-weight: 500;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 0.75rem 0;
+  overflow-y: auto;
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--black);
+  text-decoration: none;
+  letter-spacing: 0.5px;
+  border-left: 4px solid transparent;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.sidebar-nav a:hover:not(.active) {
+  background: #f0f0f0;
+}
+
+.sidebar-nav a.active {
+  background: var(--black);
+  color: var(--white);
+  border-left-color: var(--white);
+}
+
+/* ─── Sidebar Icons (pure CSS geometric) ──────────────────── */
+.sidebar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Circle — Ringkasan */
+.sidebar-icon--circle {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+/* Chat box — Percakapan */
+.sidebar-icon--chat {
+  width: 14px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  position: relative;
+}
+.sidebar-icon--chat::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 3px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+}
+
+/* Bar chart — Statistik */
+.sidebar-icon--chart {
+  width: 14px;
+  height: 12px;
+  border: 2px solid currentColor;
+  position: relative;
+}
+.sidebar-icon--chart::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 1px;
+  width: 3px;
+  height: 7px;
+  background: currentColor;
+  box-shadow: 4px 0 0 0 currentColor, 8px 0 0 0 currentColor;
+}
+
+/* List — Log Sistem */
+.sidebar-icon--list {
+  width: 14px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+  position: relative;
+}
+.sidebar-icon--list::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+  background: currentColor;
+  box-shadow: 0 3px 0 0 currentColor;
+}
+
+/* Gear — Pengaturan */
+.sidebar-icon--gear {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  position: relative;
+}
+.sidebar-icon--gear::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+/* Bug — Debug */
+.sidebar-icon--bug {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  position: relative;
+}
+.sidebar-icon--bug::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 3px;
+  background: currentColor;
+}
+.sidebar-icon--bug::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -3px;
+  width: 6px;
+  height: 2px;
+  border-top: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+
+/* Active state icons turn white */
+.sidebar-nav a.active .sidebar-icon--circle,
+.sidebar-nav a.active .sidebar-icon--chat,
+.sidebar-nav a.active .sidebar-icon--chart,
+.sidebar-nav a.active .sidebar-icon--list,
+.sidebar-nav a.active .sidebar-icon--gear,
+.sidebar-nav a.active .sidebar-icon--bug {
+  border-color: var(--white);
+}
+.sidebar-nav a.active .sidebar-icon--chat::after {
+  border-top-color: var(--white);
+}
+.sidebar-nav a.active .sidebar-icon--chart::before {
+  background: var(--white);
+  box-shadow: 4px 0 0 0 var(--white), 8px 0 0 0 var(--white);
+}
+.sidebar-nav a.active .sidebar-icon--list::before {
+  background: var(--white);
+  box-shadow: 0 3px 0 0 var(--white);
+}
+.sidebar-nav a.active .sidebar-icon--gear::before {
+  border-color: var(--white);
+}
+.sidebar-nav a.active .sidebar-icon--bug::before,
+.sidebar-nav a.active .sidebar-icon--bug::after {
+  background: var(--white);
+  border-color: var(--white);
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: #ddd;
+  border: none;
+  margin: 0.25rem 1.5rem;
+}
+
+/* Sidebar footer — Logout */
+.sidebar-footer {
+  padding: 0.75rem 1.5rem 1rem;
+}
+
+.sidebar-footer a {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gray-faint);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.sidebar-footer a:hover {
+  color: var(--black);
+}
+
+/* Logout icon — arrow exiting box */
+.sidebar-icon--logout {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  position: relative;
+  flex-shrink: 0;
+}
+.sidebar-icon--logout::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-top: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+
+/* ─── Content Area ─────────────────────────────────────────── */
+#content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+  background: var(--light-bg);
+  min-width: 0;
+}
+
+.content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+#page-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--black);
+  line-height: 1.2;
+}
+
+.content-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.refresh-badge {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--gray-light);
+  letter-spacing: 1px;
+}
+
+.btn-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border: 2px solid var(--black);
+  background: transparent;
+  color: var(--black);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  text-decoration: none;
+}
+
+.btn-sm:hover {
+  background: var(--black);
+  color: var(--white);
+}
+
+.btn-sm.spinning {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Page content container (fragment target) */
+#page-content {
+  flex: 1;
+}
+
+/* ─── Sidebar Toggle (mobile) ──────────────────────────────── */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 300;
+  width: 40px;
+  height: 40px;
+  background: var(--white);
+  border: 2px solid var(--black);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px;
+}
+
+.sidebar-toggle span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--black);
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 150;
+}
+
+.sidebar-overlay.active {
+  display: block;
+}
+
+/* ─── Panels (manga blocks) ───────────────────────────────── */
+.panel {
+  background: var(--panel-bg);
+  border: var(--border-w) solid var(--black);
+  padding: 1.25rem;
+  color: var(--black);
+  position: relative;
+}
+
+.panel::before,
+.panel::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--black);
+}
+.panel::before {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+}
+.panel::after {
+  bottom: -2px;
+  right: -2px;
+  border-left: none;
+  border-top: none;
+}
+
+.error-panel {
+  text-align: center;
+  padding: 3rem;
+  color: var(--gray);
+}
+
+.empty-panel {
+  text-align: center;
+  padding: 2rem;
+  color: var(--gray-faint);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+/* ─── Stats Grid ──────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-card {
+  text-align: center;
+  padding: 1.25rem 1rem;
+}
+
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--gray);
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  color: var(--black);
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.stat-value.text-gray {
+  color: var(--gray-faint);
+}
+
+.stat-meta {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--gray-faint);
+}
+
+/* ─── Section headers ─────────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.section-header h2 {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--black);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.section-header .badge {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--gray-faint);
+  letter-spacing: 1px;
+}
+
+/* ─── Friends list ────────────────────────────────────────── */
+.friends-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.friend-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.friend-avatar {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--black);
+  border: 2px solid var(--black);
+  flex-shrink: 0;
+  background: var(--white);
+}
+
+.friend-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-name {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--black);
+}
+
+.friend-mood {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--gray);
+  margin-top: 0.15rem;
+}
+
+.friend-status {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--black);
+  flex-shrink: 0;
+}
+
+.friend-status.online {
+  background: var(--black);
+}
+
+.friend-status.offline {
+  background: transparent;
+}
+
+/* ─── Chart panel ─────────────────────────────────────────── */
+.chart-panel {
+  margin-bottom: 1.5rem;
+}
+
+.chart-panel .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chart-panel h3 {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--black);
+}
+
+.chart-wrap {
+  position: relative;
+  height: 240px;
+  width: 100%;
+}
+
+.chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ─── Settings page ───────────────────────────────────────── */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 800px) {
+  .settings-grid { grid-template-columns: 1fr; }
+}
+
+.settings-section {
+  margin-bottom: 1.5rem;
+}
+
+.settings-section h3 {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.field-group {
+  margin-bottom: 1.25rem;
+}
+
+.field-group label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--gray);
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+
+.field-group textarea {
+  display: block;
+  width: 100%;
+  min-height: 300px;
+  padding: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--black);
+  background: var(--white);
+  border: 2px solid var(--black);
+  border-radius: 0;
+  outline: none;
+  resize: vertical;
+  transition: box-shadow 0.15s;
+}
+
+.field-group textarea:focus {
+  box-shadow: 4px 4px 0 var(--black);
+}
+
+.field-group input[type="text"] {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--black);
+  background: var(--white);
+  border: 2px solid var(--black);
+  border-radius: 0;
+  outline: none;
+  transition: box-shadow 0.15s;
+}
+
+.field-group input[type="text"]:focus {
+  box-shadow: 4px 4px 0 var(--black);
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: var(--gray-faint);
+  line-height: 1.4;
+}
+
+/* Toggle switch */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.toggle-row:last-child {
+  border-bottom: none;
+}
+
+.toggle-label {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--black);
+}
+
+.toggle-desc {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--gray);
+  margin-top: 0.15rem;
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle .slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--gray-light);
+  border: 2px solid var(--black);
+  transition: background 0.2s;
+}
+
+.toggle .slider::before {
+  content: '';
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background: var(--white);
+  border: 2px solid var(--black);
+  transition: transform 0.2s;
+}
+
+.toggle input:checked + .slider {
+  background: var(--black);
+}
+
+.toggle input:checked + .slider::before {
+  transform: translateX(20px);
+  background: var(--white);
+}
+
+/* Loader */
+.loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.loader::after {
+  content: '';
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--gray-light);
+  border-top-color: var(--black);
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 999;
+  background: var(--black);
+  color: var(--white);
+  border: var(--border-w) solid var(--white);
+  padding: 0.75rem 1.25rem;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transform: translateY(20px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.25s, opacity 0.25s;
+  box-shadow: 4px 4px 0 var(--white);
+}
+
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* ─── Responsive ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .login-card {
+    padding: 1.5rem 1.25rem;
+    box-shadow: 4px 4px 0 var(--black);
+  }
+  .login-title { font-size: 2.2rem; }
+
+  .sidebar-toggle { display: flex; }
+
+  #sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 16px rgba(0,0,0,0.2);
+  }
+
+  #sidebar.open {
+    transform: translateX(0);
+  }
+
+  #content {
+    padding: 1.5rem 1rem;
+    padding-top: 3.5rem;
+  }
+
+  #page-title {
+    font-size: 1.2rem;
+  }
+
+  .content-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  .stat-value { font-size: 1.5rem; }
+  .friends-list { grid-template-columns: 1fr; }
+  .chart-wrap { height: 200px; }
+  .section-header h2 { font-size: 0.9rem; }
+  .toast {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .content-actions .btn-sm {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.6rem;
+  }
+  .refresh-badge { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LOGIN SHELL ═══════════════ -->
+<div id="login-shell">
+  <div class="login-card">
+    <div class="login-logo">
+      <img src="ara-logo.svg" alt="Ara">
+    </div>
+    <div class="login-title">アラ</div>
+    <div class="login-subtitle">Personal AI Chatbot</div>
+    <hr class="login-divider">
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" placeholder="Masukkan password" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary" id="login-btn">Login</button>
+    </form>
+    <div class="login-footer">waifu-bot / 管制デッキ</div>
+  </div>
+</div>
+
+<!-- ═══════════════ APP SHELL ═══════════════ -->
+<div id="app-shell" class="hidden">
+  <!-- Mobile hamburger -->
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+  <!-- Mobile overlay -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div id="layout">
+    <!-- ═══ SIDEBAR ═══ -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="ara-logo.svg" alt="Ara">
+        </div>
+        <div class="sidebar-brand">
+          <div class="sidebar-brand-name">アラ</div>
+          <div class="sidebar-brand-sub">Personal AI Chatbot</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <a href="#ringkasan" class="active">
+          <span class="sidebar-icon"><span class="sidebar-icon--circle"></span></span>
+          Ringkasan
+        </a>
+        <a href="#percakapan">
+          <span class="sidebar-icon"><span class="sidebar-icon--chat"></span></span>
+          Percakapan
+        </a>
+        <a href="#statistik">
+          <span class="sidebar-icon"><span class="sidebar-icon--chart"></span></span>
+          Statistik
+        </a>
+        <a href="#log-sistem">
+          <span class="sidebar-icon"><span class="sidebar-icon--list"></span></span>
+          Log Sistem
+        </a>
+        <a href="#pengaturan">
+          <span class="sidebar-icon"><span class="sidebar-icon--gear"></span></span>
+          Pengaturan
+        </a>
+        <a href="#debug">
+          <span class="sidebar-icon"><span class="sidebar-icon--bug"></span></span>
+          Debug
+        </a>
+      </nav>
+
+      <hr class="sidebar-divider">
+
+      <div class="sidebar-footer">
+        <a href="#login" id="logout-btn">
+          <span class="sidebar-icon--logout"></span>
+          Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- ═══ CONTENT ═══ -->
+    <main id="content">
+      <div class="content-header">
+        <h1 id="page-title">Ringkasan</h1>
+        <div class="content-actions">
+          <span class="refresh-badge" id="refresh-badge"></span>
+          <button class="btn-sm" id="refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <div id="page-content"></div>
+    </main>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

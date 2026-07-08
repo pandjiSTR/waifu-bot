@@ -1,0 +1,93 @@
+<!-- Chat page fragment -->
+<div class="page-fragment">
+<style>
+/* ─── Chat page styles ──────────────────────────────────── */
+.chat-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: start; }
+.chat-contacts { margin: 0; max-height: calc(100vh - 240px); display: flex; flex-direction: column; }
+.chat-contact-list { overflow-y: auto; flex: 1; margin: 0 -1.25rem -1.25rem; padding: 0 1.25rem 1.25rem; }
+.chat-contact-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(0,0,0,0.07); cursor: pointer; transition: background 0.1s, padding 0.1s; }
+.chat-contact-item:last-child { border-bottom: none; }
+.chat-contact-item:hover { padding-left: 0.4rem; }
+.chat-contact-item.active { background: rgba(0,0,0,0.04); margin: 0 -1rem; padding: 0.75rem 1rem; }
+.chat-contact-avatar { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 1rem; color: var(--black); border: 2px solid var(--black); flex-shrink: 0; background: var(--white); }
+.chat-contact-info { flex: 1; min-width: 0; }
+.chat-contact-name { font-family: var(--font-body); font-size: 0.85rem; font-weight: 700; color: var(--black); }
+.chat-contact-meta { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.1rem; }
+.chat-contact-mood { font-family: var(--font-mono); font-size: 0.65rem; color: var(--gray); }
+.chat-contact-count { font-family: var(--font-mono); font-size: 0.6rem; color: var(--gray-faint); background: var(--light-bg); border: 1px solid rgba(0,0,0,0.15); padding: 0.1rem 0.4rem; }
+.chat-contact-arrow { font-family: var(--font-mono); font-size: 0.7rem; color: var(--gray-faint); }
+.chat-contact-item:hover .chat-contact-arrow { color: var(--black); }
+
+.chat-context { display: flex; flex-direction: column; gap: 1rem; }
+.chat-messages { margin: 0; max-height: calc(100vh - 320px); display: flex; flex-direction: column; }
+.chat-messages-list { overflow-y: auto; flex: 1; margin: 0 -1.25rem -1.25rem; padding: 0 1.25rem 0.75rem; }
+.chat-bubble { padding: 0.6rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.chat-bubble:last-child { border-bottom: none; }
+.chat-bubble-sender { font-family: var(--font-body); font-size: 0.75rem; font-weight: 700; color: var(--black); margin-bottom: 0.15rem; }
+.chat-bubble-sender.user { color: var(--gray); }
+.chat-bubble-text { font-family: var(--font-body); font-size: 0.8rem; color: var(--black); line-height: 1.5; word-break: break-word; }
+.chat-bubble-time { font-family: var(--font-mono); font-size: 0.6rem; color: var(--gray-faint); margin-top: 0.2rem; }
+
+.chat-mood-facts { font-size: 0.8rem; }
+.chat-mood-facts h4 { font-family: var(--font-display); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+.chat-fact-item { font-family: var(--font-mono); font-size: 0.7rem; color: var(--gray); padding: 0.3rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.chat-fact-item:last-child { border-bottom: none; }
+.chat-mood-label { font-family: var(--font-display); font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; color: var(--black); }
+.chat-mood-score { font-family: var(--font-mono); font-size: 0.65rem; color: var(--gray-faint); }
+
+/* Memory panel */
+.chat-memory-section { font-size: 0.8rem; }
+.chat-memory-section h4 { font-family: var(--font-display); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+.chat-memory-actions { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(0,0,0,0.1); display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.chat-fact-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-family: var(--font-mono); font-size: 0.7rem; color: var(--gray); padding: 0.3rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.chat-fact-item:last-child { border-bottom: none; }
+.btn-danger { background: var(--white); color: var(--black); border: 2px solid var(--black); }
+.btn-danger:hover { background: var(--black); color: var(--white); }
+.btn-tiny { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; font-family: var(--font-mono); font-size: 0.6rem; border: 2px solid var(--black); background: var(--white); color: var(--black); cursor: pointer; padding: 0; line-height: 1; transition: background 0.1s, color 0.1s; flex-shrink: 0; }
+.btn-tiny:hover { background: var(--black); color: var(--white); }
+
+@media (max-width: 800px) {
+  .chat-layout { grid-template-columns: 1fr; }
+  .chat-contacts { max-height: 50vh; }
+  .chat-messages { max-height: 60vh; }
+}
+</style>
+
+<div class="section-header">
+  <h2>Chat Browser</h2>
+  <span class="badge" id="chat-contact-name-badge"></span>
+</div>
+
+<div class="chat-layout">
+  <div class="panel chat-contacts" id="chat-contacts-panel">
+    <div class="panel-header">
+      <h3>Contacts</h3>
+      <span class="badge" id="chat-count">0</span>
+    </div>
+    <div class="chat-contact-list" id="chat-contact-list">
+      <div class="empty-panel">Memuat kontak...</div>
+    </div>
+  </div>
+
+  <div class="chat-context" id="chat-context-area">
+    <div class="panel chat-messages" id="chat-messages-panel">
+      <div class="panel-header">
+        <h3 id="chat-context-title">Percakapan</h3>
+      </div>
+      <div class="empty-panel" id="chat-empty">Pilih kontak untuk melihat percakapan</div>
+      <div class="chat-messages-list hidden" id="chat-messages-list"></div>
+    </div>
+
+    <div class="panel chat-mood-facts hidden" id="chat-mood-facts">
+      <div class="panel-header">
+        <h3>Memory untuk <span id="chat-memory-name">...</span></h3>
+      </div>
+      <div id="chat-mood-section"></div>
+      <div id="chat-facts-section"></div>
+      <div class="chat-memory-actions hidden" id="chat-memory-actions">
+        <button class="btn-sm btn-danger" id="chat-memory-reset-btn">Reset Memory</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>

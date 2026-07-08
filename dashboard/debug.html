@@ -1,0 +1,78 @@
+<!-- Debug page fragment -->
+<div class="page-fragment">
+<style>
+/* ─── Debug page styles ─────────────────────────────────── */
+.debug-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+.debug-card { text-align: left; padding: 1.25rem; }
+.debug-card-label { font-family: var(--font-mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gray); margin-bottom: 0.5rem; font-weight: 600; }
+.debug-card-value { font-family: var(--font-display); font-size: 1.3rem; color: var(--black); line-height: 1.2; margin-bottom: 0.25rem; word-break: break-word; }
+.debug-card-value.text-mono { font-family: var(--font-mono); font-size: 0.85rem; }
+.debug-card-meta { font-family: var(--font-mono); font-size: 0.65rem; color: var(--gray-faint); }
+.debug-status { display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 1px; }
+.debug-status--connected { color: var(--black); }
+.debug-status--disconnected { color: var(--gray-faint); }
+.debug-status-dot { width: 10px; height: 10px; border: 2px solid currentColor; display: inline-block; }
+.debug-status--connected .debug-status-dot { background: var(--black); }
+.debug-status--disconnected .debug-status-dot { background: transparent; }
+.debug-divider { border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 0.75rem 0; }
+.debug-actions { padding-top: 0.25rem; }
+
+@media (max-width: 700px) {
+  .debug-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="section-header">
+  <h2>Debug Panel</h2>
+  <span class="badge" id="debug-badge">auto-refresh 15s</span>
+</div>
+
+<div class="debug-grid" id="debug-grid">
+  <!-- Circuit Breaker -->
+  <div class="panel debug-card">
+    <div class="debug-card-label">Circuit Breaker</div>
+    <div class="debug-card-value" id="debug-cb-status">---</div>
+    <div class="debug-card-meta" id="debug-cb-meta">Threshold: -- · Cooldown: --</div>
+    <hr class="debug-divider">
+    <div class="debug-actions">
+      <button class="btn-sm" id="debug-reset-cb">Reset Circuit Breaker</button>
+    </div>
+  </div>
+
+  <!-- Redis -->
+  <div class="panel debug-card">
+    <div class="debug-card-label">Redis</div>
+    <div class="debug-card-value text-mono" id="debug-redis">---</div>
+  </div>
+
+  <!-- Ollama -->
+  <div class="panel debug-card">
+    <div class="debug-card-label">Ollama (LLM)</div>
+    <div class="debug-card-value" id="debug-ollama-model">---</div>
+    <div class="debug-card-meta" id="debug-ollama-timeout">Timeout: --</div>
+  </div>
+
+  <!-- Uptime -->
+  <div class="panel debug-card">
+    <div class="debug-card-label">Uptime</div>
+    <div class="debug-card-value text-mono" id="debug-uptime-server">---</div>
+    <div class="debug-card-meta" id="debug-uptime-session">Session: --</div>
+  </div>
+
+  <!-- Auto-Chat -->
+  <div class="panel debug-card">
+    <div class="debug-card-label">Auto-Chat</div>
+    <div class="debug-card-value" id="debug-autochat">---</div>
+  </div>
+
+  <!-- Errors Today -->
+  <div class="panel debug-card">
+    <div class="debug-card-label">Errors Today</div>
+    <div class="debug-card-value" id="debug-errors-today">---</div>
+  </div>
+</div>
+
+<div class="empty-panel debug-full-width" id="debug-error" style="display:none;">
+  Gagal memuat data debug
+</div>
+</div>

@@ -1,0 +1,60 @@
+<!-- Analytics page fragment -->
+<div class="page-fragment">
+<style>
+/* ─── Analytics page styles ─────────────────────────────── */
+.analytics-range { display: flex; gap: 0; margin-bottom: 1.5rem; border: 2px solid var(--black); width: fit-content; }
+.analytics-range-btn { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; padding: 0.5rem 1rem; border: none; background: var(--white); color: var(--gray-faint); cursor: pointer; letter-spacing: 1px; text-transform: uppercase; transition: background 0.1s, color 0.1s; border-right: 1px solid var(--black); }
+.analytics-range-btn:last-child { border-right: none; }
+.analytics-range-btn:hover { color: var(--black); }
+.analytics-range-btn.active { background: var(--black); color: var(--white); }
+.analytics-chart-row { margin-bottom: 1.5rem; }
+.analytics-chart-row .chart-wrap { height: 280px; }
+.analytics-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+.analytics-split .chart-wrap { height: 220px; }
+
+@media (max-width: 700px) {
+  .analytics-split { grid-template-columns: 1fr; }
+  .analytics-range { width: 100%; }
+  .analytics-range-btn { flex: 1; text-align: center; font-size: 0.65rem; padding: 0.5rem 0.6rem; }
+}
+</style>
+
+<div class="section-header">
+  <h2>Analytics</h2>
+  <span class="badge" id="analytics-badge">data real-time</span>
+</div>
+
+<div class="analytics-range" id="analytics-range">
+  <button class="analytics-range-btn active" data-range="7d">7 Hari</button>
+  <button class="analytics-range-btn" data-range="30d">30 Hari</button>
+  <button class="analytics-range-btn" data-range="90d">90 Hari</button>
+</div>
+
+<div class="panel chart-panel analytics-chart-row" id="analytics-trend-panel">
+  <div class="panel-header">
+    <h3>Tren Pesan</h3>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="analytics-trend-chart"></canvas>
+  </div>
+</div>
+
+<div class="analytics-split">
+  <div class="panel chart-panel">
+    <div class="panel-header">
+      <h3>Top 5 Friends</h3>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="analytics-top-chart"></canvas>
+    </div>
+  </div>
+  <div class="panel chart-panel">
+    <div class="panel-header">
+      <h3>Distribusi Jam</h3>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="analytics-hourly-chart"></canvas>
+    </div>
+  </div>
+</div>
+</div>

@@ -1,0 +1,23 @@
+{
+  "project": "Ara — Personal WhatsApp AI Chatbot",
+  "columns": ["Backlog", "Ready", "In Progress", "Review", "Done"],
+  "cards": [
+    { "id": 0, "title": "Project initialization", "column": "Done", "assignee": "orchestrator", "priority": "high" },
+    { "id": 1, "title": "Fase 1: personality.txt loader + read/write mechanism", "column": "Review", "assignee": "orchestrator-frontend", "priority": "high" },
+    { "id": 2, "title": "Fase 2: Auth dashboard (login, JWT, bcrypt)", "column": "Review", "assignee": "orchestrator-frontend", "priority": "high" },
+    { "id": 7, "title": "Fase 7: Dashboard 3 halaman (SPA)", "column": "Review", "assignee": "orchestrator-frontend", "priority": "high" },
+    { "id": 3, "title": "Fase 3: Message pipeline inti + sliding-window context", "column": "Done", "assignee": "orchestrator-database", "priority": "high" },
+    { "id": 4, "title": "Fase 4: Reliabilitas pengiriman pesan (§5.7)", "column": "Done", "assignee": "orchestrator-database", "priority": "high" },
+    { "id": 5, "title": "Fase 5: Circuit breaker minimal (§6.3)", "column": "Done", "assignee": "orchestrator-database", "priority": "high" },
+    { "id": 6, "title": "Fase 6: Fitur pendukung (sticker, search, media, auto-chat)", "column": "Done", "assignee": "orchestrator-database", "priority": "medium" },
+    { "id": 8, "title": "Fase 8: Testing esensial (§11)", "column": "Done", "assignee": "orchestrator-testing", "priority": "medium" },
+    { "id": 9, "title": "Gap: eslint.config.js (npm run lint)", "column": "Done", "assignee": "orchestrator-quality", "priority": "high" },
+    { "id": 10, "title": "Gap: scaffold test/ dir (npm test)", "column": "Done", "assignee": "orchestrator-testing", "priority": "high" },
+    { "id": 11, "title": "Gap: scripts/build-dashboard.js (npm run build)", "column": "Done", "assignee": "orchestrator-frontend", "priority": "high" },
+    { "id": 12, "title": "Gap: render.yaml deploy config", "column": "Done", "assignee": "orchestrator-architecture", "priority": "medium" },
+    { "id": 13, "title": "Gap: .env.example", "column": "Done", "assignee": "orchestrator-document", "priority": "medium" },
+    { "id": 14, "title": "Redis-back baileys auth + OLLAMA_HOST fix + disable summarization", "column": "Done", "assignee": "orchestrator-database", "priority": "high" },
+    { "id": 15, "title": "Fase 6 sisa: search (Ollama web) + auto-chat", "column": "Done", "assignee": "orchestrator-database", "priority": "medium" }
+  ],
+  "wip_limits": { "In Progress": 3, "Review": 2 }
+}

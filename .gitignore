@@ -1,0 +1,17 @@
+# Environment
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build output
+dashboard/out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
