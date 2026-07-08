@@ -50,8 +50,9 @@ export async function initWhatsApp(redis) {
         try {
           await redis?.set('waifu:qr', qr, 300);
         } catch {
-          // non-fatal: QR is also printed to terminal
+          // non-fatal
         }
+        console.log('QR_CODE:', qr);
         logger.info('QR code received — scan with WhatsApp to pair');
       }
 
