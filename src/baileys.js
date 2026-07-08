@@ -37,6 +37,11 @@ export async function initWhatsApp(redis) {
     const { state, saveCreds } = await useRedisAuthState(redis);
     const { version } = await fetchLatestBaileysVersion();
 
+    if (!state.creds.registered) {
+      logger.info('No registered session found — will show QR');
+      await redis.set('waifu:qr:status', 'ready');
+    }
+
     const sock = makeWASocket({
       auth: state,
       version,
@@ -49,10 +54,13 @@ export async function initWhatsApp(redis) {
 
     sock.ev.on('creds.update', saveCreds);
 
+    let qrEmitted = false;
+
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr && !state?.creds?.registered) {
+        qrEmitted = true;
         try {
           await redis?.set('waifu:qr', qr, 300);
         } catch {}
@@ -65,6 +73,10 @@ export async function initWhatsApp(redis) {
         logger.info('WhatsApp connected');
       } else if (connection === 'close') {
         connectionState = 'disconnected';
+        if (qrEmitted) {
+          logger.warn('Close after QR — ignoring, QR already sent');
+          return;
+        }
         const statusCode = lastDisconnect?.error
           ? new Boom(lastDisconnect?.error)?.output?.statusCode
           : undefined;
@@ -79,7 +91,7 @@ export async function initWhatsApp(redis) {
           logger.error({ statusCode }, 'Auth invalid — clearing session for fresh QR');
           await clearRedisAuth(redis);
           logger.info('Exiting process — Render will restart with fresh auth');
-          process.exit(1);
+          setTimeout(() => process.exit(1), 500);
         } else {
           logger.warn({ statusCode }, 'WhatsApp connection closed — baileys will auto-reconnect');
         }
