@@ -194,6 +194,8 @@ export async function connectToWhatsApp() {
 
         if (!(await shouldProcess(body, ctx))) continue;
 
+        newSock.sendPresenceUpdate('composing', ctx.jid).catch(() => {});
+
         await processLLM(body, ctx).catch((err) =>
           logger.error({ err }, 'processLLM failed'));
       } catch (err) {
