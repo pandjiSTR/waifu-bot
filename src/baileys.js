@@ -36,6 +36,7 @@ export async function initWhatsApp(redis) {
 
     const sock = makeWASocket({
       auth: state,
+      printQRInTerminal: true,
       logger, // quiet pino adapter; baileys' verbose info/debug are suppressed
     });
 
@@ -50,9 +51,8 @@ export async function initWhatsApp(redis) {
         try {
           await redis?.set('waifu:qr', qr, 300);
         } catch {
-          // non-fatal
+          // non-fatal: QR is also printed to terminal
         }
-        console.log('QR_CODE:', qr);
         logger.info('QR code received — scan with WhatsApp to pair');
       }
 
