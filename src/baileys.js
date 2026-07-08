@@ -34,10 +34,9 @@ export async function initWhatsApp(redis) {
     // importing this module remains side-effect free.
     const { state, saveCreds } = await useRedisAuthState(redis);
 
-    const sock = makeWASocket({
+const sock = makeWASocket({
       auth: state,
-      printQRInTerminal: true,
-      logger, // quiet pino adapter; baileys' verbose info/debug are suppressed
+      logger,
     });
 
     connectionState = 'connecting';
@@ -46,6 +45,21 @@ export async function initWhatsApp(redis) {
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, qr, lastDisconnect } = update;
+
+      // Pairing code: when socket connects and creds aren't registered yet,
+      // request a pairing code for the owner number.
+      if (connection === 'open' && !sock.authState?.creds?.registered) {
+        const number = process.env.OWNER_NUMBER?.split(',')?.[0]?.trim();
+        if (number) {
+          try {
+            const code = await sock.requestPairingCode(number);
+            console.log('PAIRING_CODE:', code);
+            logger.info({ number }, 'Pairing code generated');
+          } catch (err) {
+            logger.warn({ err }, 'Pairing code request failed');
+          }
+        }
+      }
 
       if (qr) {
         try {
