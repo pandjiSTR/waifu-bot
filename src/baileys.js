@@ -48,16 +48,24 @@ const sock = makeWASocket({
 
       // Pairing code: when socket connects and creds aren't registered yet,
       // request a pairing code for the owner number.
-      if (connection === 'open' && !sock.authState?.creds?.registered) {
-        const number = process.env.BOT_NUMBER?.trim();
-        if (number) {
-          try {
-            const code = await sock.requestPairingCode(number);
-            console.log('PAIRING_CODE:', code);
-            logger.info({ number }, 'Pairing code generated');
-          } catch (err) {
-            logger.warn({ err }, 'Pairing code request failed');
+      if (connection === 'open') {
+        logger.info('WhatsApp socket opened (connection=open)');
+        if (!sock.authState?.creds?.registered) {
+          logger.info('creds not registered — requesting pairing code');
+          const number = process.env.BOT_NUMBER?.trim();
+          if (number) {
+            try {
+              const code = await sock.requestPairingCode(number);
+              console.log('PAIRING_CODE:', code);
+              logger.info({ number }, 'Pairing code generated');
+            } catch (err) {
+              logger.warn({ err }, 'Pairing code request failed');
+            }
+          } else {
+            logger.warn('BOT_NUMBER not set — cannot request pairing code');
           }
+        } else {
+          logger.info('creds already registered — skipping pairing');
         }
       }
 
