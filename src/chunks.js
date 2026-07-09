@@ -92,6 +92,11 @@ export function splitChunks(text, maxChars = DEFAULT_MAX_CHARS) {
  * @returns {Promise<{sent:number, total:number, failed:boolean}>}
  */
 export async function sendChunks(sock, jid, text, opts = {}) {
+  // Wire-level guard: the internal "|||" multi-message delimiter must never
+  // reach WhatsApp. This is the final boundary — any code path that delivers
+  // text (LLM reply, auto-chat, future features) is covered here.
+  text = String(text ?? '').replace(/\s*\|\|\|\s*/g, ' ');
+
   const maxChars = opts.maxChars ?? DEFAULT_MAX_CHARS;
   const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   const delayMs = opts.delayMs ?? DEFAULT_DELAY_MS;
