@@ -60,7 +60,10 @@ let sweepTimer = process.env.NODE_ENV !== 'test' ? setInterval(pruneSeen, 5 * 60
 
 function normalizeNumber(n) {
   if (!n) return '';
-  return String(n).replace(/@s\.whatsapp\.net$/, '').replace(/[^0-9]/g, '');
+  return String(n)
+    .replace(/@s\.whatsapp\.net$/, '')
+    .replace(/:\d+$/, '') // strip device suffix, e.g. :0 in 628...:0@s.whatsapp.net
+    .replace(/[^0-9]/g, '');
 }
 
 function pruneSeen() {
@@ -136,11 +139,12 @@ function isStickerRequest(ctx) {
   if (/stiker|sticker/i.test(caption)) return true;
 
   // Reply to a bot message (image sent as a reply). The quoted participant
-  // equals the bot's own JID when replying to Ara.
+  // equals the bot's own JID when replying to Ara. Use the connection-captured
+  // JID (ctx.botJid) so it is reliable even if sock.user.id is unset.
   const ctxInfo = msg.imageMessage.contextInfo;
   if (ctxInfo?.quotedMessage) {
-    const botJid = ctx?.sock?.user?.id;
-    if (botJid && ctxInfo.participant === botJid) return true;
+    const botNumber = normalizeNumber(ctx?.botJid || ctx?.sock?.user?.id);
+    if (botNumber && normalizeNumber(ctxInfo.participant) === botNumber) return true;
   }
   return false;
 }
@@ -185,14 +189,17 @@ export async function shouldProcess(body, ctx) {
 
   // 5. Group rules: respond only on mention / reply-to-bot / command prefix.
   if (ctx.isGroup) {
-    const botJid = ctx.sock?.user?.id?.split('@')[0] + '@s.whatsapp.net';
+    // Prefer the JID captured at connection time (ctx.botJid); fall back to the
+    // socket's user id. Compare on normalized digits so LID / device-suffix
+    // / @mention-prefix formats all match reliably.
+    const botNumber = normalizeNumber(ctx.botJid || ctx.sock?.user?.id);
     const contextInfo = ctx.message?.message?.extendedTextMessage?.contextInfo;
     const mentioned = contextInfo?.mentionedJid || [];
     const mentionedBot =
-      Array.isArray(mentioned) && mentioned.includes(botJid);
+      Array.isArray(mentioned) && mentioned.some((j) => normalizeNumber(j) === botNumber);
     const quotedParticipant = contextInfo?.participant;
     const quotedBot = quotedParticipant
-      ? normalizeNumber(quotedParticipant) === normalizeNumber(botJid)
+      ? normalizeNumber(quotedParticipant) === botNumber
       : false;
     const bodyLower = String(body).toLowerCase();
     if (!mentionedBot && !quotedBot && !/\bara+/i.test(bodyLower)) {

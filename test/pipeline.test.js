@@ -120,6 +120,73 @@ test('shouldProcess allows group message containing the command prefix', async (
   assert.strictEqual(await pipeline.shouldProcess('ara ceritakan jokes', ctx), true);
 });
 
+test('shouldProcess responds to a group reply quoting the bot (no "ara" text)', async () => {
+  const ctx = makeCtx({
+    isGroup: true,
+    jid: '120363012345678@g.us',
+    sender: '6281234567890@s.whatsapp.net',
+    botJid: '6285000000000@s.whatsapp.net',
+    message: {
+      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
+      message: {
+        extendedTextMessage: {
+          text: 'siap',
+          contextInfo: {
+            participant: '6285000000000@s.whatsapp.net',
+            quotedMessage: { conversation: 'hai' },
+          },
+        },
+      },
+    },
+  });
+  assert.strictEqual(await pipeline.shouldProcess('siap', ctx), true);
+});
+
+test('shouldProcess ignores a group reply quoting another user', async () => {
+  const ctx = makeCtx({
+    isGroup: true,
+    jid: '120363012345678@g.us',
+    sender: '6281234567890@s.whatsapp.net',
+    botJid: '6285000000000@s.whatsapp.net',
+    message: {
+      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
+      message: {
+        extendedTextMessage: {
+          text: 'iya dong',
+          contextInfo: {
+            participant: '6289999999999@s.whatsapp.net',
+            quotedMessage: { conversation: 'ayo' },
+          },
+        },
+      },
+    },
+  });
+  assert.strictEqual(await pipeline.shouldProcess('iya dong', ctx), false);
+});
+
+test('shouldProcess matches bot JID across LID/device-suffix formats', async () => {
+  const ctx = makeCtx({
+    isGroup: true,
+    jid: '120363012345678@g.us',
+    sender: '6281234567890@s.whatsapp.net',
+    botJid: '6285000000000:0@s.whatsapp.net',
+    message: {
+      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
+      message: {
+        extendedTextMessage: {
+          text: 'oke',
+          contextInfo: {
+            participant: '6285000000000@s.whatsapp.net',
+            quotedMessage: { conversation: 'halo' },
+          },
+        },
+      },
+    },
+  });
+  assert.strictEqual(await pipeline.shouldProcess('oke', ctx), true);
+});
+
+
 test('shouldProcess ignores sticker media (no media handling yet)', async () => {
   const ctx = makeCtx({
     message: {

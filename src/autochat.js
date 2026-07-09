@@ -9,7 +9,10 @@ const logger = pino({ name: 'autochat', level: process.env.LOG_LEVEL || 'warn' }
 
 function normalizeNumber(n) {
   if (!n) return '';
-  return String(n).replace(/@s\.whatsapp\.net$/, '').replace(/[^0-9]/g, '');
+  return String(n)
+    .replace(/@s\.whatsapp\.net$/, '')
+    .replace(/:\d+$/, '') // strip device suffix, e.g. :0 in 628...:0@s.whatsapp.net
+    .replace(/[^0-9]/g, '');
 }
 
 const OWNER_NUMBERS = (process.env.OWNER_NUMBER || '')

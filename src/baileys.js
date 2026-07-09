@@ -15,6 +15,13 @@ const logger = pino({ name: 'baileys', level: process.env.LOG_LEVEL || 'warn' })
 let connectionState = 'disconnected';
 let sock = null;
 let redis = null;
+// Captured once at connection 'open' so group mention/reply-to-bot detection
+// never depends on ctx.sock.user.id being populated at message-arrival time.
+let botJid = null;
+
+export function getBotJid() {
+  return botJid;
+}
 let isShuttingDown = false;
 let isReconnecting = false;
 let reconnectAttempt = 0;
@@ -112,6 +119,7 @@ export async function connectToWhatsApp() {
 
     if (connection === 'open') {
       connectionState = 'connected';
+      botJid = newSock.user?.id || botJid;
       logger.info('WhatsApp connected');
       isReconnecting = false;
       consecutive500 = 0;
@@ -200,6 +208,7 @@ export async function connectToWhatsApp() {
           jid: m.key.remoteJid, isGroup,
           sender: m.key.participant || m.key.remoteJid,
           message: m, body, messageId: m.key.id,
+          botJid: botJid || newSock.user?.id || undefined,
         };
 
         // T10: persist ALL group messages to the group context window so Ara
