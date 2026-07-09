@@ -1,6 +1,6 @@
 # ARA — NATURALNESS + BUG FIX PLAN
 
-Status: T15 + T16 + T17 done
+Status: T15 + T16 + T17 + T18 done
 
 ## T15 — Strip `|||` Delimiter from Short Replies
 
@@ -57,4 +57,34 @@ conversation, not per-reply — every reply still contained one "wkwk".
 - - If Ara hasn't laughed recently, she may still laugh once per reply in a laughy
   stretch; acceptable (far rarer than before). Could tighten the window later.
 - - Lookback is the in-memory/Redis context window (≤5 recent Ara messages).
+
+## T18 — Ara Jadi "Dingin" (warmth rebalance)
+
+**File:** personality.txt (+ reset persisted MOOD in Redis)
+
+**Root cause:** Ara went cold in affectionate moments. Two strong causes:
+1. A persisted `MOOD` (e.g. `cuek`/`ngambek`) for the owner was injected every
+   prompt via `buildSystemPrompt` (personality.js:115) — overrides warmth across sessions.
+2. Recent persona edits over-corrected: T4 `bucin/baper` ban + T9 "JANGAN mirror /
+   JANGAN mirror emosi" read by the model as "don't show emotion at all" → flat.
+   Plus the flat style examples and the "dingin/kesel/males" AI-rule tone leaking.
+
+**Fix (per user: "selalu hangat kapanpun"; AI-question = option a: short & males, not cold):**
+- personality.txt: make warmth an UNCONDITIONAL baseline (Kepribadian header).
+- Scope mirror rule: don't copy phrasing verbatim, but always match user's
+  warm/romantic tone; never reply flat to affection.
+- Scope emosi rule: only negative emotion is banned from mirroring; positive/
+  romantic MUST be reciprocated.
+- Clarify gaul ban: bucin/baper forbidden only as forced slang words; being
+  baper/manja/gombal toward {OWNER_NAME} is encouraged.
+- Soften AI-rule tone: short & males-santai but NOT cold/nyuekin; only for "kamu AI?".
+- Add warm reply examples for affectionate moments.
+- Reset persisted MOOD for the owner (see user steps below).
+
+**Tradeoff:**
+- + Ara warm in all situations, still short & natural (no conflict with T7/T17).
+- + MOOD reset restores consistency across sessions.
+- - Tension "57% 1-3 words" vs "warm" resolved as short-but-warm via examples.
+- - AI-question tone softened (a), not removed — Ara stays briefly dismissive there only.
+- - Purely persona + MOOD reset; 0 pipeline changes, 0 tests broken.
 
