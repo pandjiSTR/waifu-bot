@@ -203,10 +203,13 @@ export async function connectToWhatsApp() {
         };
 
         // T10: persist ALL group messages to the group context window so Ara
-        // has context even for messages that don't mention her
+        // has context even for messages that don't mention her.
+        // NOTE: sender MUST stay ctx.sender (the jid), NOT m.pushName — T6's
+        // replaceLastMessage matches sender === ctx.sender to enrich media
+        // context. Display names are resolved separately (T14).
         if (isGroup) {
           await addMessage(redis, ctx.jid, {
-            sender: m.pushName || ctx.sender,
+            sender: ctx.sender,
             text: body,
             timestamp: new Date().toISOString(),
           }, true);

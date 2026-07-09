@@ -152,10 +152,10 @@ export async function maybeProactive(ctx) {
     );
 
     if (text) {
-      const { naturalizeReply } = await import('./naturalize.js');
+      const { naturalizeReply, guardLaughs } = await import('./naturalize.js');
       const { sendChunks: realChunksFn } = await import('./chunks.js');
       const chunksFn = ctx.sendChunks || realChunksFn;
-      const normalized = naturalizeReply(text);
+      const normalized = guardLaughs(naturalizeReply(text));
       await sock?.sendPresenceUpdate?.('composing', ownerJid).catch?.(() => {});
       await chunksFn(sock, ownerJid, normalized);
 
