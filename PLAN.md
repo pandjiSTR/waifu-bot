@@ -15,22 +15,23 @@ Status: T15 + T16 done
 - + Zero risk: `|||` never appears in legitimate conversational text.
 - - Minor redundancy between the two strips (one extra regex scan, negligible).
 
-## T16 — Group Reply / Mention to Bot Not Detected (regression)
+## T16 — Group Reply to Bot Not Detected (regression, FIXED via main-branch approach)
 
-**Files:** src/pipeline.js (`normalizeNumber`, `shouldProcess`, `isStickerRequest`), src/autochat.js (`normalizeNumber`), src/baileys.js (capture bot JID)
+**Files:** src/pipeline.js (`botSentIds` Set, `trackBotMessage`, `shouldProcess`, `processLLM`), src/chunks.js (`sendChunks` returns `ids`), src/baileys.js (`ctx.botJid` capture), src/autochat.js (`normalizeNumber`)
 
-**Root cause (two compounding bugs):**
-1. `normalizeNumber()` appended the device suffix as digits: `normalizeNumber('6285…:0@s.whatsapp.net')` → `'6285…0'` (extra trailing 0). Baileys 6.x sets `sock.user.id` to `…:0@s.whatsapp.net`, so the bot's normalized number never matched `contextInfo.participant` (no suffix) → reply-to-bot AND @mention detection both failed in groups. Only the literal "ara" text match survived → "ara ga respon reply".
-2. `shouldProcess` re-derived `botJid` from `ctx.sock.user.id` per message, which may be unset at arrival time.
+**Root cause:** `revamped` tried to detect "reply to bot" by matching `contextInfo.participant` against the bot's JID (`normalizeNumber`). In production that comparison never matched (Baileys `sock.user.id` carries a `:0` device suffix and/or the participant format differs), so group replies to Ara — and @mentions — silently failed; only the literal "ara" text match survived.
 
-**Fix:**
-- `normalizeNumber` now strips the `:N` device suffix before removing non-digits (both copies: pipeline.js + autochat.js).
-- `baileys.js` captures the bot JID once at connection `open` and passes it via `ctx.botJid` (fallback to `sock.user.id`).
-- `shouldProcess` / `isStickerRequest` use `normalizeNumber(ctx.botJid || ctx.sock.user.id)` and compare normalized digits for both mention and quoted-reply.
+**Fix (mirrors the working `main` branch):**
+- `normalizeNumber` strips the `:N` device suffix before removing non-digits (both pipeline.js + autochat.js).
+- `baileys.js` captures the bot JID at connection `open` and passes it via `ctx.botJid` (fallback to `sock.user.id`).
+- `sendChunks` now returns the `ids` of messages Baileys actually delivered (`result.key.id`).
+- `processLLM` (and the circuit fallback) track every sent id via `trackBotMessage` into an in-memory `botSentIds` Set.
+- `shouldProcess` detects "reply to Ara" via `contextInfo.stanzaId && botSentIds.has(stanzaId)` — robust, format-independent — OR'd with the @mention and "ara" keyword checks. Replies to other users (unknown stanzaId) stay ignored.
 
 **Tradeoff:**
-- + Group replies to Ara and @mentions now reliably trigger responses; replies to other users stay ignored.
-- + Robust to LID / device-suffix / @mention-prefix formats.
-- + Capturing bot JID at `open` removes per-message dependence on `sock.user.id`.
-- - None significant. Low risk, covered by 3 new tests (reply-to-bot, reply-to-other, LID-format match).
+- + Group replies to Ara now reliably trigger responses regardless of JID/participant format quirks.
+- + Same mechanism as `main` (proven in production).
+- + @mentions and "ara" keyword still work as before.
+- - `botSentIds` is in-memory (resets on restart, 30-min-ish TTL via 10k cap) — matches `main`; a restart briefly forgets very old reply targets. Acceptable.
+- - Covers processLLM + circuit fallback; autochat sends to owner in private chat (replies already work there) so not tracked.
 

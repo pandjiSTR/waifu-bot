@@ -89,7 +89,7 @@ export function splitChunks(text, maxChars = DEFAULT_MAX_CHARS) {
  * @param {number} [opts.delayMs=250]   // pause between chunks
  * @param {number} [opts.backoffBaseMs=500] // backoff base (×2^attempt)
  * @param {Function} [opts.sendMessage] // injectable: (jid, {text}) => Promise
- * @returns {Promise<{sent:number, total:number, failed:boolean}>}
+ * @returns {Promise<{sent:number, total:number, failed:boolean, ids:string[]}>}
  */
 export async function sendChunks(sock, jid, text, opts = {}) {
   // Wire-level guard: the internal "|||" multi-message delimiter must never
@@ -109,6 +109,9 @@ export async function sendChunks(sock, jid, text, opts = {}) {
 
   const chunks = splitChunks(text, maxChars);
   const total = chunks.length;
+  // Collect the message ids Baileys assigned to each successfully delivered
+  // chunk. Callers use these to recognize later replies quoting the bot.
+  const sentIds = [];
 
   // No transport available (e.g. headless test / socket not yet connected).
   // Skip gracefully; nothing was delivered but this is not an error condition.
@@ -116,7 +119,7 @@ export async function sendChunks(sock, jid, text, opts = {}) {
     if (sock) {
       logger.debug({ jid, total }, 'sendChunks: no sendMessage available, skipping');
     }
-    return { sent: 0, total, failed: false };
+    return { sent: 0, total, failed: false, ids: [] };
   }
 
   let sent = 0;
@@ -128,8 +131,9 @@ export async function sendChunks(sock, jid, text, opts = {}) {
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        await sendMessage(jid, { text: chunk });
+        const result = await sendMessage(jid, { text: chunk });
         delivered = true;
+        if (result?.key?.id) sentIds.push(result.key.id);
         break;
       } catch (err) {
         if (attempt < maxAttempts - 1) {
@@ -160,7 +164,7 @@ export async function sendChunks(sock, jid, text, opts = {}) {
     }
   }
 
-  return { sent, total, failed };
+  return { sent, total, failed, ids: sentIds };
 }
 
 export default { splitChunks, sendChunks };

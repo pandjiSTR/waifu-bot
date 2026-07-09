@@ -164,6 +164,51 @@ test('shouldProcess ignores a group reply quoting another user', async () => {
   assert.strictEqual(await pipeline.shouldProcess('iya dong', ctx), false);
 });
 
+test('shouldProcess responds to a group reply quoting a tracked bot message (stanzaId)', async () => {
+  pipeline.trackBotMessage('bot-msg-xyz');
+  const ctx = makeCtx({
+    isGroup: true,
+    jid: '120363012345678@g.us',
+    sender: '6281234567890@s.whatsapp.net',
+    message: {
+      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
+      message: {
+        extendedTextMessage: {
+          text: 'wah bener',
+          contextInfo: {
+            stanzaId: 'bot-msg-xyz',
+            quotedMessage: { conversation: 'halo' },
+          },
+        },
+      },
+    },
+  });
+  // No "ara" text, no @mention, no participant match — but the quoted stanzaId
+  // is a message the bot actually sent, so it must respond.
+  assert.strictEqual(await pipeline.shouldProcess('wah bener', ctx), true);
+});
+
+test('shouldProcess ignores a group reply whose stanzaId is not a bot message', async () => {
+  const ctx = makeCtx({
+    isGroup: true,
+    jid: '120363012345678@g.us',
+    sender: '6281234567890@s.whatsapp.net',
+    message: {
+      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
+      message: {
+        extendedTextMessage: {
+          text: 'oke',
+          contextInfo: {
+            stanzaId: 'someone-else-msg',
+            quotedMessage: { conversation: 'halo' },
+          },
+        },
+      },
+    },
+  });
+  assert.strictEqual(await pipeline.shouldProcess('oke', ctx), false);
+});
+
 test('shouldProcess matches bot JID across LID/device-suffix formats', async () => {
   const ctx = makeCtx({
     isGroup: true,

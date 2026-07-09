@@ -58,7 +58,7 @@ test('sendChunks sends each chunk in order via the socket', async () => {
     delayMs: 0,
   });
   assert.deepStrictEqual(sent, ['hello', 'world', 'foo']);
-  assert.deepStrictEqual(res, { sent: 3, total: 3, failed: false });
+  assert.deepStrictEqual(res, { sent: 3, total: 3, failed: false, ids: [] });
 });
 
 test('sendChunks retries a failing chunk then succeeds', async () => {
@@ -106,7 +106,7 @@ test('sendChunks stops after a chunk exhausts retries and reports failure', asyn
 
 test('sendChunks no-ops gracefully when sock has no sendMessage', async () => {
   const res = await sendChunks(null, 'jid', 'hello world', { maxChars: 5 });
-  assert.deepStrictEqual(res, { sent: 0, total: 2, failed: false });
+  assert.deepStrictEqual(res, { sent: 0, total: 2, failed: false, ids: [] });
 });
 
 // T8: CHUNK_SEND_RETRY env var

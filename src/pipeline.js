@@ -58,6 +58,18 @@ const seen = new Map();
 const SEEN_TTL_MS = 60 * 1000;
 let sweepTimer = process.env.NODE_ENV !== 'test' ? setInterval(pruneSeen, 5 * 60 * 1000) : null;
 
+// Tracks the message ids the bot itself has sent, so a later reply quoting one
+// of them (contextInfo.stanzaId) can be recognized as "reply to Ara" without
+// fragile JID/participant comparison. Mirrors the proven main-branch approach.
+const botSentIds = new Set();
+const MAX_BOT_SENT = 10000;
+
+export function trackBotMessage(id) {
+  if (!id) return;
+  if (botSentIds.size >= MAX_BOT_SENT) botSentIds.clear();
+  botSentIds.add(id);
+}
+
 function normalizeNumber(n) {
   if (!n) return '';
   return String(n)
@@ -201,8 +213,13 @@ export async function shouldProcess(body, ctx) {
     const quotedBot = quotedParticipant
       ? normalizeNumber(quotedParticipant) === botNumber
       : false;
+    // Robust reply-to-bot detection (mirrors main branch): if the quoted
+    // message id is one the bot actually sent, this is a reply to Ara —
+    // independent of participant/JID format quirks.
+    const stanzaId = contextInfo?.stanzaId;
+    const isReplyToBot = Boolean(stanzaId) && botSentIds.has(stanzaId);
     const bodyLower = String(body).toLowerCase();
-    if (!mentionedBot && !quotedBot && !/\bara+/i.test(bodyLower)) {
+    if (!mentionedBot && !quotedBot && !isReplyToBot && !/\bara+/i.test(bodyLower)) {
       return false;
     }
   }
@@ -449,7 +466,7 @@ export async function processLLM(body, ctx) {
     await maybeAlertOwner(ctx);
     await sendChunks(ctx.sock, userId, CIRCUIT_FALLBACK, {
       sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
-    });
+    }).then((d) => { if (d?.ids) d.ids.forEach(trackBotMessage); });
     logger.info({ duration: Date.now() - pStart, action: 'circuit_fallback' }, 'Message processed');
     return;
   }
@@ -572,6 +589,7 @@ export async function processLLM(body, ctx) {
     const delivery = await sendChunks(ctx.sock, userId, segments[i], {
       sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
     });
+    if (delivery.ids) delivery.ids.forEach(trackBotMessage);
     if (delivery.failed) {
       deliveryFailed = true;
       logger.warn({ delivery }, 'sendChunks failed for segment');
