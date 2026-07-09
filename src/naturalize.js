@@ -49,6 +49,41 @@ function stripWrappingFence(text) {
  * @param {string} text
  * @returns {string}
  */
+/**
+ * Limit laugh expressions to at most ONE per reply, keeping the first and
+ * stripping the rest (plus any dangling whitespace/punctuation they leave).
+ *
+ * This is a behavioral guard (per explicit instruction) — the allowed laugh
+ * tokens mirror the list in personality.txt. It never invents persona voice;
+ * it only thins out redundant laughs so Ara doesn't spam "wkwk" every line.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+const LAUGH_RE = /(wkwk+|awikwok|akwowkaok|wkakwkw|akwokwkw|wk+)/gi;
+export function guardLaughs(text) {
+  const t0 = String(text ?? '');
+  const matches = t0.match(LAUGH_RE);
+  if (!matches || matches.length <= 1) return t0.trim();
+
+  let firstKept = false;
+  let t = t0.replace(LAUGH_RE, (m) => {
+    if (!firstKept) {
+      firstKept = true;
+      return m;
+    }
+    return '';
+  });
+
+  // Clean up dangling artifacts left by removed laughs.
+  t = t
+    .replace(/\s+([,.!?])/g, '$1') // "halo ." -> "halo."
+    .replace(/ {2,}/g, ' ') // double spaces
+    .replace(/\s+/g, (s) => (s.includes('\n') ? s : ' ')) // collapse spaces only
+    .trim();
+  return t;
+}
+
 export function naturalizeReply(text) {
   let t = String(text ?? '').trim();
 

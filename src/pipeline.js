@@ -3,7 +3,7 @@ import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
 import { addMessage, getWindow, summarizeContext, replaceLastMessage } from './context.js';
 import { sendChunks } from './chunks.js';
-import { naturalizeReply } from './naturalize.js';
+import { naturalizeReply, guardLaughs } from './naturalize.js';
 import { isOpen, remainingMs, onTrip, onClose } from './circuit.js';
 import { detectBadword } from './badwords.js';
 import { describeImage, extractPdfText, getMediaBuffer } from './media.js';
@@ -16,7 +16,7 @@ import { getFriendMemory, addFact, setMood } from './memory.js';
 // (persona strings live only in personality.txt per AGENTS.md #1).
 const BADWORD_TONE_INSTRUCTION = 'Tanggapi dengan nada sarkastik.';
 
-const MULTI_MESSAGE_INSTRUCTION = `\n\nKadang, kalau ada hal lanjutan yang natural (oh ya, btw, info tambahan), pisahkan respons jadi 2 chat terpisah pakai delimiter "|||". Jangan dipaksa kalau 1 chat cukup. Tiap bagian harus berdiri sendiri dan nyambung.`;
+const MULTI_MESSAGE_INSTRUCTION = `\n\nKalau balasan PANJANG (banyak poin/cerita/penjelasan), pisahkan jadi beberapa chat terpisah yang natural pakai delimiter "|||" atau paragraph baru. Tiap bagian harus berdiri sendiri dan nyambung. TAPI kalau cuma ngobrol pendek, kirim 1 chat utuh — JANGAN pecah tiap baris.`;
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
@@ -155,10 +155,17 @@ export async function shouldProcess(body, ctx) {
   // 1. Echo / self
   if (ctx.message?.key?.fromMe) return false;
 
-  // 2. Dedup
+  // 2. Dedup (memory + Redis NX: survives restart / multi-instance)
   pruneSeen();
-  if (ctx.messageId && seen.has(ctx.messageId)) return false;
-  if (ctx.messageId) seen.set(ctx.messageId, Date.now() + SEEN_TTL_MS);
+  const mid = ctx.messageId;
+  if (mid && seen.has(mid)) return false;
+  if (mid && ctx.redis) {
+    try {
+      const r = await ctx.redis.set(`waifu:seen:${mid}`, '1', 'EX', 300, 'NX');
+      if (r === null) return false; // already processed -> skip
+    } catch { /* fall back to memory-only */ }
+  }
+  if (mid) seen.set(mid, Date.now() + SEEN_TTL_MS);
 
   // 3. Blacklist
   const senderNorm = normalizeNumber(ctx.sender);
@@ -183,7 +190,10 @@ export async function shouldProcess(body, ctx) {
     const mentioned = contextInfo?.mentionedJid || [];
     const mentionedBot =
       Array.isArray(mentioned) && mentioned.includes(botJid);
-    const quotedBot = Boolean(contextInfo?.quotedMessage);
+    const quotedParticipant = contextInfo?.participant;
+    const quotedBot = quotedParticipant
+      ? normalizeNumber(quotedParticipant) === normalizeNumber(botJid)
+      : false;
     const bodyLower = String(body).toLowerCase();
     if (!mentionedBot && !quotedBot && !/\bara+/i.test(bodyLower)) {
       return false;
@@ -321,12 +331,16 @@ export async function processLLM(body, ctx) {
   }
 
   // Persist the user's message FIRST so the next turn includes it.
-  await addMessage(
-    ctx.redis,
-    userId,
-    { sender: ctx.sender, text: body, timestamp: new Date().toISOString() },
-    isGroup
-  );
+  // (Groups are already persisted in baileys.js before shouldProcess, so we
+  // skip the duplicate write here for groups.)
+  if (!isGroup) {
+    await addMessage(
+      ctx.redis,
+      userId,
+      { sender: ctx.sender, text: body, timestamp: new Date().toISOString() },
+      isGroup
+    );
+  }
 
   const window = await getWindow(ctx.redis, userId, isGroup);
 
@@ -531,12 +545,16 @@ export async function processLLM(body, ctx) {
 
   // Fase 4: normalize (generic, persona-agnostic) before delivery.
   reply = naturalizeReply(reply);
+  reply = guardLaughs(reply);
 
-  // Split into natural segments: paragraphs OR explicit ||| delimiter
-  const segments = reply
-    .split(/\n\n|\s*\|\|\|\s*/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Split long replies into natural segments; short replies stay as 1 bubble
+  // (prevents flooding on banter). No hard cap — a genuinely long reply may
+  // become several bubbles, which is intended.
+  const LONG_REPLY_THRESHOLD = 100;
+  const segments =
+    reply.length >= LONG_REPLY_THRESHOLD
+      ? reply.split(/\n\n|\s*\|\|\|\s*/).map((s) => s.trim()).filter(Boolean)
+      : [reply.trim()].filter(Boolean);
 
   let deliveryFailed = false;
   for (let i = 0; i < segments.length; i++) {

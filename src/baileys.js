@@ -7,6 +7,7 @@ import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { shouldProcess, processLLM, extractText } from './pipeline.js';
+import { addMessage } from './context.js';
 import { useRedisAuthState } from './baileys-auth.js';
 
 const logger = pino({ name: 'baileys', level: process.env.LOG_LEVEL || 'warn' });
@@ -200,6 +201,30 @@ export async function connectToWhatsApp() {
           sender: m.key.participant || m.key.remoteJid,
           message: m, body, messageId: m.key.id,
         };
+
+        // T10: persist ALL group messages to the group context window so Ara
+        // has context even for messages that don't mention her
+        if (isGroup) {
+          await addMessage(redis, ctx.jid, {
+            sender: m.pushName || ctx.sender,
+            text: body,
+            timestamp: new Date().toISOString(),
+          }, true);
+        }
+
+        // T14: capture display names so the dashboard shows names, not IDs
+        if (m.pushName && redis) {
+          await redis.hset('waifu:friends:names', ctx.sender, m.pushName).catch(() => {});
+        }
+        if (isGroup && redis) {
+          const cached = await redis.hget('waifu:groups:names', ctx.jid).catch(() => null);
+          if (!cached) {
+            try {
+              const meta = await newSock.groupMetadata(ctx.jid);
+              if (meta?.subject) await redis.hset('waifu:groups:names', ctx.jid, meta.subject).catch(() => {});
+            } catch { /* ignore metadata failures */ }
+          }
+        }
 
         if (!(await shouldProcess(body, ctx))) continue;
 

@@ -9,6 +9,21 @@ import pino from 'pino';
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
 /**
+ * Resolve a display name for a WhatsApp id from the Redis name hashes.
+ * Falls back to the raw id when no name is stored or Redis is unavailable.
+ */
+async function resolveName(redis, id, isGroup = false) {
+  if (!redis || !id) return id || '';
+  try {
+    const key = isGroup ? 'waifu:groups:names' : 'waifu:friends:names';
+    const name = await redis.hget(key, id);
+    return name || id;
+  } catch {
+    return id;
+  }
+}
+
+/**
  * Helper to send a JSON response.
  */
 function json(res, statusCode, data) {
@@ -104,9 +119,9 @@ export async function handleOverview(req, res) {
         const friendCounts = await req.redis.hgetall('waifu:stats:friends') || {};
         const entries = Object.entries(friendCounts);
         const sorted = entries.sort((a, b) => b[1] - a[1]);
-        friends = sorted.slice(0, 20).map(([number, msgCount]) => ({
-          number, msgCount: parseInt(msgCount), name: number
-        }));
+        friends = await Promise.all(sorted.slice(0, 20).map(async ([number, msgCount]) => ({
+          number, msgCount: parseInt(msgCount), name: await resolveName(req.redis, number, false)
+        })));
       }
     } catch (e) { logger.warn({ err: e }, 'overview redis read failed'); }
 
@@ -140,7 +155,7 @@ export async function handleGetFriends(req, res) {
     if (req.redis) {
       const data = await req.redis.hgetall('waifu:stats:friends') || {};
       const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
-      friends = sorted.map(([number, msgCount]) => ({ number, msgCount: parseInt(msgCount), name: number }));
+      friends = await Promise.all(sorted.map(async ([number, msgCount]) => ({ number, msgCount: parseInt(msgCount), name: await resolveName(req.redis, number, false) })));
     }
     json(res, 200, { friends });
   } catch (err) {
@@ -347,11 +362,17 @@ export async function handleGetContacts(req, res) {
     let contacts = [];
     if (req.redis) {
       const keys = await req.redis.keys('waifu:ctx:*');
+      const groupKeys = await req.redis.keys('waifu:grup:*');
       const friendCounts = await req.redis.hgetall('waifu:stats:friends') || {};
       for (const key of keys) {
         const number = key.replace('waifu:ctx:', '');
         const msgCount = parseInt(friendCounts[number] || '0');
-        contacts.push({ number, name: number, msgCount, mood: { score: 0, label: '-' } });
+        contacts.push({ number, name: await resolveName(req.redis, number, false), msgCount, isGroup: false, mood: { score: 0, label: '-' } });
+      }
+      for (const key of groupKeys) {
+        const gid = key.replace('waifu:grup:', '');
+        const msgCount = await req.redis.llen(key).catch(() => 0) || 0;
+        contacts.push({ number: gid, name: await resolveName(req.redis, gid, true), msgCount, isGroup: true, mood: { score: 0, label: '-' } });
       }
       contacts.sort((a, b) => b.msgCount - a.msgCount);
     }
@@ -379,7 +400,9 @@ export async function handleGetContext(req, res) {
 
     let context = [];
     if (req.redis && number) {
-      const raw = await req.redis.lrange(`waifu:ctx:${number}`, 0, 49);
+      const isGroup = number.includes('@g.us');
+      const storeKey = isGroup ? `waifu:grup:${number}` : `waifu:ctx:${number}`;
+      const raw = await req.redis.lrange(storeKey, 0, 49);
       context = raw.map(s => { try { return JSON.parse(s); } catch { return { text: s }; } });
     }
     json(res, 200, { number, context });
@@ -511,9 +534,11 @@ export async function handleGetTopFriends(req, res) {
       const data = await req.redis.hgetall('waifu:stats:friends') || {};
       const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 20);
       const total = sorted.reduce((s, [, c]) => s + parseInt(c), 0) || 1;
-      topFriends = sorted.map(([name, count]) => ({
-        name, msgCount: parseInt(count), percentage: Math.round(parseInt(count) / total * 100)
-      }));
+      topFriends = await Promise.all(sorted.map(async ([name, count]) => ({
+        name: await resolveName(req.redis, name, false),
+        msgCount: parseInt(count),
+        percentage: Math.round(parseInt(count) / total * 100)
+      })));
     }
     json(res, 200, { topFriends });
   } catch (err) {

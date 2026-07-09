@@ -5,7 +5,7 @@ import { isOpen } from './circuit.js';
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
 const PRIVATE_MAX = parseInt(process.env.MAX_CONTEXT_MESSAGES || '30', 10);
-const GROUP_MAX = parseInt(process.env.MAX_GROUP_CONTEXT_MESSAGES || '50', 10);
+const GROUP_MAX = parseInt(process.env.MAX_GROUP_CONTEXT_MESSAGES || '30', 10);
 const GROUP_TTL_S = parseInt(process.env.GROUP_CTX_TTL_DAYS || '7', 10) * 86400;
 const PRIVATE_TTL_S = 86400;
 

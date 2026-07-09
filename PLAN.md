@@ -1,231 +1,225 @@
-gak# Naturalness Hardening — 6 Tickets
+# ARA — NATURALNESS + BUG FIX PLAN
 
-## Ticket 1 — Fix Group Mention
-**File:** `src/pipeline.js`
-**Line:** 187
-**Before:**
-```js
-if (!mentionedBot && !quotedBot && !bodyLower.includes(COMMAND_PREFIX)) {
-```
-**After:**
-```js
-if (!mentionedBot && !quotedBot && !/\bara+/i.test(bodyLower)) {
-```
-**Effect:** `ara`/`araaaa` kepanggil; `cara`/`amarah`/`bara`/`gara-gara` gak.
+Status: APPROVED (gas). Execution in progress.
 
----
+## Background
+Dari log chat grup (Panji <-> "Bakwan Jagung"=Ara) + investigasi kode ditemukan
+beberapa masalah produksi + 1 dashboard polish:
 
-## Ticket 2 — Multi-Message Reply (split + follow-up, 1 LLM call)
-**File:** `src/pipeline.js`
+1. Bot flood (1 trigger -> banyak bubble pendek)
+2. Ketawa berlebihan (wkwk di ~5/12 balasan, padahal reference.md ~2%)
+3. Mirror / loop / scold user (ngulang pertanyaan, niru frasa, ngomelin user)
+4. Ara buta konteks chat grup tanpa mention "ara"
+5. Ara ke-panggil pas user balas chat orang lain (bukan Ara)
+6. Dedup in-memory only -> bot bisa baca 1 chat berkali kali (restart/deploy)
+7. Dashboard tampilkan user & grup pakai ID, bukan nama
 
-### 2a. Multi-message instruction
-Tambah konstanta baru (di dekat `BADWORD_TONE_INSTRUCTION`, sekitar line 349):
-```js
-const MULTI_MESSAGE_INSTRUCTION = `\n\nKadang, kalau ada hal lanjutan yang natural (oh ya, btw, info tambahan), pisahkan respons jadi 2 chat terpisah pakai delimiter "|||". Jangan dipaksa kalau 1 chat cukup. Tiap bagian harus berdiri sendiri dan nyambung.`;
-```
-Lalu append ke `systemPrompt` setelah `BADWORD_TONE_INSTRUCTION` (sekitar line 351):
-```js
-systemPrompt += MULTI_MESSAGE_INSTRUCTION;
-```
-
-### 2b. Split & send loop
-**Lines:** 524–530 (ganti seluruh block)
-**Before:**
-```js
-reply = naturalizeReply(reply);
-
-const delivery = await sendChunks(ctx.sock, userId, reply, {
-  sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
-});
-
-if (delivery.failed) {
-  logger.warn({ delivery }, 'sendChunks failed to deliver all chunks');
-}
-```
-**After:**
-```js
-reply = naturalizeReply(reply);
-
-const segments = reply
-  .split(/\n\n|\s*\|\|\|\s*/)
-  .map(s => s.trim())
-  .filter(Boolean);
-
-let deliveryFailed = false;
-for (let i = 0; i < segments.length; i++) {
-  if (i > 0) {
-    await new Promise(r => setTimeout(r, 1500));
-    await ctx.sock?.sendPresenceUpdate('composing', userId).catch(() => {});
-  }
-  const delivery = await sendChunks(ctx.sock, userId, segments[i], {
-    sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
-  });
-  if (delivery.failed) {
-    deliveryFailed = true;
-    logger.warn({ delivery }, 'sendChunks failed for segment');
-  }
-}
-```
-**Notes:**
-- `sendChunks` otomatis handle chunking per-segment berdasarkan panjang.
-- Delay 1.5s + typing indicator sebelum tiap segmen kecuali yang pertama.
-- `addMessage` tetap simpan full `reply` (line 539–549) — gak berubah.
+Plus tuning: GROUP_MAX 50 -> 30.
 
 ---
 
-## Ticket 3 — Typing indicator antar-segmen
-Sudah ada di `baileys.js` (1 `sendPresenceUpdate('composing')` sebelum `processLLM`).
-Ticket 2b menambahkan typing di *antar* segmen (sebelum segmen ke-2 dst).
+## T7 — Multi-bubble HANYA untuk balasan panjang (tanpa cap)
+
+File: src/pipeline.js (split loop ~line 535 + MULTI_MESSAGE_INSTRUCTION ~line 19/352)
+
+Fix:
+- Split cuma kalau `reply.length >= 100`. Tidak ada cap jumlah bubble — kalau
+  balasan panjang, boleh pecah jadi banyak bubble (tergantung panjangnya).
+- Instruksi: "Kalau panjang (banyak poin/cerita), pisah jadi beberapa chat
+  natural pakai `|||` atau paragraph. Kalau pendek, kirim 1 chat utuh — jangan
+  pecah tiap baris."
+
+Tradeoff:
+- + Panjang terpisah (sesuai maumu), pendek gak flood.
+- - Threshold 100 tunable. Kalau kekecil, pendek ke-split; kebesar, panjang jadi 1 bubble.
+- - Tanpa cap, balasan sangat panjang bisa jadi banyak bubble (itu memang diinginkan).
 
 ---
 
-## Ticket 4 — personality.txt edits (dari reference.md)
-**File:** `personality.txt`
+## T8 — Laugh Guard (natural)
 
-### 4b. Dictionary gaul (line 82)
-**Before:**
-```
-JANGAN pake kata gaul yang dipaksa: santuy, curcol, gercep, gaje, slebew, sokin, sabi.
-```
-**After:**
-```
-JANGAN pake kata gaul yang dipaksa: santuy, curcol, gercep, gaje, slebew, sokin, sabi, bucin, baper.
-```
+File: src/naturalize.js
 
-### 4c. Aturan ketawa (line 94)
-**Before:**
-```
-Variasiin ketawa, jangan cuma "wkwkwk" doang: "awikwok", "akwowkaok", "wkakwkw", "akwokwkw" — gak tiap kalimat, muncul natural sesuai konteks
-```
-**After:**
-```
-KETAWA JANGAN BANYAK. Maksimal 1 dari 10 chat, dan cuma kalau beneran lucu/ngakak — jangan di tiap balasan, jangan di akhir tiap respon. Variasiin kalau dipake: "awikwok", "akwowkaok", "wkakwkw", "akwokwkw" (bukan cuma "wkwkwk").
-```
+Fix: Hitung ekspresi ketawa (wkwk|awikwok|akwowkaok|wkakwkw|akwokwkw|wk).
+Kalau >1 per reply -> simpan yang PERTAMA, buang sisanya bersih (gak ninggalin
+sisa/pendding punctuation).
+
+Tradeoff:
+- + Ketawa dijaga keras (T4 persona gagal di log), tapi tetap natural.
+- - Kalau model bikin 1 ketawa legit di awal + 1 di akhir, yang akhir ilang. Minor.
+- - Butuh tes naturalize biar gak salah potong kata normal.
 
 ---
 
-## Ticket 5 — Harden Auto-chat (fix Gap A)
-**File:** `src/autochat.js`
+## T9 — Persona: Stop Mirror / Loop / Scold
 
-### 5a. Task instruction
-**Lines:** 140–143
-**Before:**
-```js
-const taskInstruction =
-  'Kirim SATU pesan proaktif singkat kepada owner seolah Ara memulai obrolan. ' +
-  '1-3 kata, natural ala WA Indonesia, tanpa emoji. ' +
-  'Jangan setiap saat — hanya kalau relevan/ringan.';
-```
-**After:**
-```js
-const taskInstruction =
-  'Kirim SATU pesan proaktif singkat kepada owner seolah Ara memulai obrolan. ' +
-  '1-3 kata, natural ala WA Indonesia, tanpa emoji. ' +
-  'Jangan mulai dengan hai/halo. Jangan tanya soal skripsi/jurnal/tugas kuliah. ' +
-  '1 kalimat aja.';
-```
+File: personality.txt
 
-### 5b. Naturalize reply
-**Lines:** 154–161 (ganti block)
-**Before:**
-```js
-if (text) {
-  const chunksFn = ctx.sendChunks || sendChunks;
-  await chunksFn(sock, ownerJid, text);
+Fix: Tambah paragraf:
+"JANGAN ngulang pertanyaan user berurutan. JANGAN niru frasa user secara persis.
+JANGAN ngomelin/mengkritik user (typo, berisik, dll). JANGAN mirror emosi negatif user."
 
-  // Update last-sent timestamp
-  if (redis) {
-    await redis.set('waifu:autochat:last', String(Date.now()));
-  }
-}
-```
-**After:**
-```js
-if (text) {
-  const { sendChunks } = await import('./chunks.js');
-  const { naturalizeReply } = await import('./naturalize.js');
-  const normalized = naturalizeReply(text);
-  await sock?.sendPresenceUpdate('composing', ownerJid).catch(() => {});
-  await sendChunks(sock, ownerJid, normalized);
-
-  if (redis) {
-    await redis.set('waifu:autochat:last', String(Date.now()));
-  }
-}
-```
+Tradeoff:
+- + Bot warm, gak judgmental/weird. Zero risk ke fitur lain.
+- - Hampir gak ada.
 
 ---
 
-## Ticket 6 — Vision reply cap (fix Gap B)
-**File:** `src/pipeline.js`
+## T10 — Group Context Persistence
 
-### 6a. Set flag saat imageMessage
-**Lines:** 374–391 (tambah `isImageReply` flag)
-**Before:**
+File: src/baileys.js (handler messages.upsert) + src/pipeline.js:322-328
+
+Fix:
+1. baileys.js: import addMessage dari ./context.js; simpan SEMUA pesan grup ke
+   window SEBELUM shouldProcess:
+   ```js
+   if (isGroup) {
+     await addMessage(redis, ctx.jid, {
+       sender: m.pushName || ctx.sender,
+       text: body,
+       timestamp: new Date().toISOString(),
+     }, true);
+   }
+   if (!(await shouldProcess(body, ctx))) continue;
+   ```
+2. pipeline.js:322-328: guard jadi `if (!isGroup) { await addMessage(...) }`
+   biar gak duplikat.
+3. pipeline.js:559 (balasan Ara, sender 'ara') tetap.
+
+Tradeoff:
+- + Ara paham konteks obrolan grup tanpa mention. Pakai m.pushName -> Ara lihat nama.
+- - Window grup penuh lebih cepat -> ditangani T12 (GROUP_MAX 30).
+- - Pesan gambar tanpa mention: cuma caption yg kesimpan. Acceptable.
+
+---
+
+## T11 — Reply ke Orang Lain Salah Panggil Bot
+
+File: src/pipeline.js:186
+
+Fix: Ganti `const quotedBot = Boolean(contextInfo?.quotedMessage);` jadi:
 ```js
-let mediaContext = ctx.mediaContext;
-if (!mediaContext && ctx.message?.message) {
-  const msgNode = ctx.message.message;
+const quotedParticipant = contextInfo?.participant;
+const quotedBot = quotedParticipant
+  ? normalizeNumber(quotedParticipant) === normalizeNumber(botJid)
+  : false;
+```
+(normalizeNumber sudah ada di pipeline.js:61.)
+
+Tradeoff:
+- + Balas ke orang lain -> bot diam; balas ke Ara -> tetap respon.
+- - Edge: kalau participant gak keisi untuk reply aneh, quotedBot=false (safe skip).
+
+---
+
+## T12 — GROUP_MAX 50 -> 30
+
+File: src/context.js:8
+```js
+const GROUP_MAX = parseInt(process.env.MAX_GROUP_CONTEXT_MESSAGES || '30', 10);
+```
+
+Tradeoff:
+- + Cukup buat konteks ~10 round-trip, gak bloat prompt (num_ctx grup = 8192).
+- - Ara "lupa" obrolan >30 pesan lalu. Acceptable.
+
+---
+
+## T13 — Redis-backed Dedup (fix "baca 1 chat berkali kali")
+
+File: src/pipeline.js shouldProcess (lines 158-161)
+
+Fix: Ganti in-memory-only dedup jadi memory + Redis NX:
+```js
+pruneSeen();
+const mid = ctx.messageId;
+if (mid && seen.has(mid)) return false;
+if (mid && ctx.redis) {
   try {
-    if (msgNode.imageMessage) {
-      const desc = await describeImage(ctx.sock, ctx.message, body);
-      if (desc) mediaContext = `[GAMBAR] ${desc}`;
-    } else if (
-```
-**After:**
-```js
-let mediaContext = ctx.mediaContext;
-let isImageReply = false;
-if (!mediaContext && ctx.message?.message) {
-  const msgNode = ctx.message.message;
-  try {
-    if (msgNode.imageMessage) {
-      isImageReply = true;
-      const desc = await describeImage(ctx.sock, ctx.message, body);
-      if (desc) mediaContext = `[GAMBAR] ${desc}`;
-    } else if (
-```
-
-### 6b. Cap panjang setelah naturalizeReply
-**Lines:** setelah `reply = naturalizeReply(reply);` (sekitar line 525), sebelum split loop (T2b):
-```js
-reply = naturalizeReply(reply);
-
-if (isImageReply) {
-  const sentences = reply.split(/(?<=[.!?])\s+/);
-  if (sentences.length > 2) {
-    reply = sentences.slice(0, 2).join(' ');
-  }
+    const r = await ctx.redis.set(`waifu:seen:${mid}`, '1', 'EX', 300, 'NX');
+    if (r === null) return false; // sudah diproses -> skip
+  } catch { /* fall back to memory-only */ }
 }
-// ... T2b split loop starts here
+if (mid) seen.set(mid, Date.now() + SEEN_TTL_MS);
 ```
+
+Tradeoff:
+- + FIX DEFINITIF buat "baca 1 chat berkali kali". SET NX atomic, 1 messageId = 1
+  proses di semua instance & lintas restart. Murah (1 round-trip/pesan).
+- - TTL 5 menit: pesan SAMA persis dalam 5 menit ke-2 di-skip. Rare.
+- - Kalau Redis down -> fallback memory (OK single-instance).
 
 ---
 
-## Files affected (summary)
-| File | Chang |
+## T14 — Dashboard: User & Grup pakai Nama (bukan ID)
+
+File: src/baileys.js (capture nama) + src/api-skeleton.js (resolve nama) +
+      src/memory.js (helper opsional) + dashboard (minor, auto-render name)
+
+Masalah: Dashboard (overview friends, /api/friends, /api/chat/contacts,
+top-friends) tampilkan `name: number` (nomor/JID). User & grup kelihatan pakai ID.
+
+Fix:
+1. Tambah 2 hash Redis:
+   - `waifu:friends:names`  (number -> displayName dari pushName)
+   - `waifu:groups:names`   (groupJid -> subject dari groupMetadata)
+2. baileys.js messages.upsert handler (bareng T10):
+   - Private: `if (m.pushName) redis.hset('waifu:friends:names', number, m.pushName)`
+   - Group: cache subject — fetch `sock.groupMetadata(jid).subject` (try/catch,
+     cuma kalau belum ada di hash), `redis.hset('waifu:groups:names', jid, subject)`.
+3. Helper resolusi nama (di memory.js atau api-skeleton.js):
+   `resolveName(redis, id, namesHash)` -> baca hash, fallback ke id.
+4. Update endpoint:
+   - overview (line 107-109), /api/friends (143), /api/chat/contacts (354),
+     top-friends (514) -> pakai resolveName.
+   - /api/chat/contacts: IKUT sertakan `waifu:grup:*` sebagai kontak
+     `isGroup:true`, name dari `waifu:groups:names`.
+   - /api/chat/context: deteksi groupJid (mengandung '@g.us') -> baca
+     `waifu:grup:` bukan `waifu:ctx:`.
+5. Dashboard JS sudah render `friend.name`/`contact.name` -> otomatis pakai nama.
+   (Opsional: badge "GRUP" di contact item.)
+
+Tradeoff:
+- + Dashboard kelihatan rapi: user & grup pakai nama asli.
+- + Grup muncul di daftar chat dengan nama.
+- - Butuh 1 network call groupMetadata per grup baru (di-cache, jarang).
+- - Nama dari pushName bisa kadaluarsa (user ganti nama WA) -> fallback ke number.
+- - Group context viewer jadi baca waifu:grup: (perubahan kecil di endpoint).
+
+---
+
+## FILES AFFECTED
+
+| File | Tickets |
 |---|---|
-| `src/pipeline.js` | T1 (regex), T2a (+MULTI_MESSAGE_INSTRUCTION), T2b (split loop), T6a (isImageReply flag), T6b (vision cap) |
-| `src/autochat.js` | T5 (taskInstruction, naturalizeReply, typing) |
-| `personality.txt` | T4b (+bucin,baper), T4c (perketat ketawa) |
+| src/pipeline.js | T7 (split), T9 (instruction), T10 (guard addMessage), T11 (quotedBot), T13 (dedup) |
+| src/baileys.js | T10 (save all group msgs), T14 (capture nama user & grup) |
+| src/naturalize.js | T8 (laugh guard) |
+| src/context.js | T12 (GROUP_MAX 30) |
+| src/api-skeleton.js | T14 (resolve nama di 4 endpoint + grup di contacts/context) |
+| src/memory.js | T14 (helper resolveName, opsional) |
+| personality.txt | T9 (mirror/loop/scold) |
+| dashboard/*.js | T14 (minor: badge GRUP, auto-render name sudah ada) |
 
 ---
 
-## Verifikasi
-- `npm run lint` — harus clean (0 errors)
-- `npm test` — semua test (147+) harus lolos
-- Manual test:
-  - Grup: `cara bobo` → gak kepanggil; `ara haloo` → kepanggil; `araaaaa` → kepanggil
-  - Info request → reply kepecah ≥2 chat dengan jeda + typing
-  - Kirim gambar → balasan ≤2 kalimat
-  - Tunggu auto-chat → gak ada "halo"/"skripsi"
-  - Pantau log: `bucin`/`baper`/`wkwkwk` jarang atau gak muncul
+## EXECUTION ORDER
+1. personality.txt (T9)
+2. src/context.js (T12)
+3. src/naturalize.js (T8)
+4. src/baileys.js (T10 + T14 capture)
+5. src/pipeline.js (T7 + T10 guard + T11 + T13)
+6. src/api-skeleton.js (T14 resolve + grup)
+7. npm run lint
+8. npm test
+9. commit + push -> Render deploy
 
 ---
 
-## Execution order
-1. `personality.txt` edits (T4b, T4c)
-2. `src/autochat.js` (T5)
-3. `src/pipeline.js` — T1, T2, T6 (semua file yang sama, bisa 1 commit)
-4. Push → deploy di Render
-5. Test manual
+## VERIFICATION
+- npm run lint -> clean
+- npm test -> 219+ pass
+- Manual grup: reply ke org lain -> Ara diam; mention "ara" -> respon; chat tanpa
+  mention laku mention -> Ara paham; 1 trigger pendek -> 1 bubble; balasan panjang
+  -> banyak bubble; ketawa jarang; pesan sama 2x -> 1 respon.
+- Dashboard: user & grup tampil nama, bukan nomor/JID.
