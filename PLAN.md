@@ -1,6 +1,6 @@
 # ARA — NATURALNESS + BUG FIX PLAN
 
-Status: T15 + T16 done
+Status: T15 + T16 + T17 done
 
 ## T15 — Strip `|||` Delimiter from Short Replies
 
@@ -34,4 +34,27 @@ Status: T15 + T16 done
 - + @mentions and "ara" keyword still work as before.
 - - `botSentIds` is in-memory (resets on restart, 30-min-ish TTL via 10k cap) — matches `main`; a restart briefly forgets very old reply targets. Acceptable.
 - - Covers processLLM + circuit fallback; autochat sends to owner in private chat (replies already work there) so not tracked.
+
+## T17 — Ara Masih "wkwk" Terus (laugh frequency)
+
+**File:** src/naturalize.js (`hasLaugh`, `guardLaughs` max param), src/pipeline.js (context-aware suppression)
+
+**Root cause:** `guardLaughs` already limited laughs to ONE per reply, but the model
+emits a laugh in *nearly every* reply. So the problem was frequency across the
+conversation, not per-reply — every reply still contained one "wkwk".
+
+**Fix:**
+- `guardLaughs(text, { max = 1 })` — `max: 0` strips ALL laughs.
+- `hasLaugh(text)` — fresh non-global regex (avoids `/g` `lastIndex` state bug).
+- `processLLM` checks the recent context window: if Ara's last ≤5 messages contain
+  a laugh, the current reply is guarded with `max: 0` (suppressed); otherwise
+  `max: 1`. Result: Ara laughs at most ~once per 5 of her messages, not every reply.
+
+**Tradeoff:**
+- + Laughs become rare/occasional (matches reference.md ~2%), directly fixing "wkwk mulu".
+- + No persona strings hardcoded — pure behavioral guard.
+- + `hasLaugh` uses a fresh regex, so repeated calls are correct.
+- - If Ara hasn't laughed recently, she may still laugh once per reply in a laughy
+  stretch; acceptable (far rarer than before). Could tighten the window later.
+- - Lookback is the in-memory/Redis context window (≤5 recent Ara messages).
 

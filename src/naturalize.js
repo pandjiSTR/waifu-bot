@@ -50,26 +50,42 @@ function stripWrappingFence(text) {
  * @returns {string}
  */
 /**
- * Limit laugh expressions to at most ONE per reply, keeping the first and
- * stripping the rest (plus any dangling whitespace/punctuation they leave).
+ * Detect whether a text contains a laugh expression.
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+const LAUGH_PATTERN = 'wkwk+|awikwok|akwowkaok|wkakwkw|akwokwkw|wk+';
+export function hasLaugh(text) {
+  // Fresh, non-global regex each call — `test()` on a /g regex mutates
+  // lastIndex and would give alternating results across calls.
+  return new RegExp(LAUGH_PATTERN, 'i').test(String(text ?? ''));
+}
+
+/**
+ * Limit laugh expressions in a reply. By default keeps at most ONE laugh
+ * (the first); pass { max: 0 } to strip them all.
  *
  * This is a behavioral guard (per explicit instruction) — the allowed laugh
  * tokens mirror the list in personality.txt. It never invents persona voice;
  * it only thins out redundant laughs so Ara doesn't spam "wkwk" every line.
+ * Callers use { max: 0 } when Ara already laughed recently in the conversation
+ * (cross-reply frequency control).
  *
  * @param {string} text
+ * @param {{max?:number}} [opts]
  * @returns {string}
  */
-const LAUGH_RE = /(wkwk+|awikwok|akwowkaok|wkakwkw|akwokwkw|wk+)/gi;
-export function guardLaughs(text) {
+export function guardLaughs(text, { max = 1 } = {}) {
   const t0 = String(text ?? '');
-  const matches = t0.match(LAUGH_RE);
-  if (!matches || matches.length <= 1) return t0.trim();
+  const re = new RegExp(LAUGH_PATTERN, 'gi');
+  const matches = t0.match(re);
+  if (!matches || matches.length <= max) return t0.trim();
 
-  let firstKept = false;
-  let t = t0.replace(LAUGH_RE, (m) => {
-    if (!firstKept) {
-      firstKept = true;
+  let kept = 0;
+  let t = t0.replace(re, (m) => {
+    if (kept < max) {
+      kept += 1;
       return m;
     }
     return '';

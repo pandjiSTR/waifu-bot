@@ -1,7 +1,7 @@
 // Tests for src/naturalize.js — generic, persona-agnostic normalization.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { naturalizeReply } from '../src/naturalize.js';
+import { naturalizeReply, guardLaughs, hasLaugh } from '../src/naturalize.js';
 
 test('naturalizeReply trims surrounding whitespace', () => {
   assert.strictEqual(naturalizeReply('   hai   '), 'hai');
@@ -45,4 +45,32 @@ test('naturalizeReply keeps a same-line trailing ellipsis (not an artifact)', ()
 
 test('naturalizeReply returns empty string for empty input', () => {
   assert.strictEqual(naturalizeReply(''), '');
+});
+
+test('hasLaugh detects common laugh tokens', () => {
+  assert.strictEqual(hasLaugh('wkwk lucu banget'), true);
+  assert.strictEqual(hasLaugh('akwokwkw masa sih'), true);
+  assert.strictEqual(hasLaugh('wk wk'), true);
+  assert.strictEqual(hasLaugh('halo apa kabar'), false);
+});
+
+test('hasLaugh does not suffer global-regex lastIndex state bug', () => {
+  assert.strictEqual(hasLaugh('wkwk'), true);
+  assert.strictEqual(hasLaugh('wkwk'), true);
+  assert.strictEqual(hasLaugh('serius'), false);
+  assert.strictEqual(hasLaugh('wkwk'), true);
+});
+
+test('guardLaughs keeps at most one laugh by default', () => {
+  assert.strictEqual(guardLaughs('wkwk lucu wkwk banget wkwk'), 'wkwk lucu banget');
+});
+
+test('guardLaughs strips all laughs when max is 0', () => {
+  assert.strictEqual(guardLaughs('wkwk lucu wkwk banget', { max: 0 }), 'lucu banget');
+  assert.strictEqual(guardLaughs('wkwk aja', { max: 0 }), 'aja');
+});
+
+test('guardLaughs keeps text unchanged when no/within limit', () => {
+  assert.strictEqual(guardLaughs('halo apa kabar'), 'halo apa kabar');
+  assert.strictEqual(guardLaughs('wkwk lucu', { max: 0 }), 'lucu');
 });

@@ -3,7 +3,7 @@ import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
 import { addMessage, getWindow, summarizeContext, replaceLastMessage } from './context.js';
 import { sendChunks } from './chunks.js';
-import { naturalizeReply, guardLaughs } from './naturalize.js';
+import { naturalizeReply, guardLaughs, hasLaugh } from './naturalize.js';
 import { isOpen, remainingMs, onTrip, onClose } from './circuit.js';
 import { detectBadword } from './badwords.js';
 import { describeImage, extractPdfText, getMediaBuffer } from './media.js';
@@ -368,6 +368,14 @@ export async function processLLM(body, ctx) {
 
   const window = await getWindow(ctx.redis, userId, isGroup);
 
+  // Cross-reply laugh control: if Ara already laughed in her recent messages,
+  // suppress laughs in this reply too (max 0). Otherwise allow at most one.
+  // This keeps laughs rare across a conversation instead of every reply.
+  const araRecentLaughed = window
+    .filter((m) => m.sender === 'ara')
+    .slice(-5)
+    .some((m) => hasLaugh(m.text));
+
   const recentContext = window
     .map((m) =>
       m.sender === '__summary__'
@@ -569,7 +577,7 @@ export async function processLLM(body, ctx) {
 
   // Fase 4: normalize (generic, persona-agnostic) before delivery.
   reply = naturalizeReply(reply);
-  reply = guardLaughs(reply);
+  reply = guardLaughs(reply, { max: araRecentLaughed ? 0 : 1 });
 
   // Split long replies into natural segments; short replies stay as 1 bubble
   // (prevents flooding on banter). No hard cap — a genuinely long reply may
