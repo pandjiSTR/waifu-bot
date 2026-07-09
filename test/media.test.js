@@ -108,3 +108,19 @@ test('getMediaBuffer returns null on download failure', async () => {
   const out = await media.getMediaBuffer(sock, { message: {} });
   assert.strictEqual(out, null);
 });
+
+test('getMediaBuffer passes reuploadRequest option to download', async () => {
+  const sock = {
+    updateMediaMessage: () => {},
+    downloadMediaMessage: (...args) => {
+      sock.__callArgs = args;
+      return Buffer.from('img');
+    },
+  };
+  const out = await media.getMediaBuffer(sock, {});
+  assert.ok(Buffer.isBuffer(out));
+  assert.strictEqual(out.toString(), 'img');
+  const opts = sock.__callArgs[3];
+  assert.ok(opts && typeof opts === 'object');
+  assert.strictEqual(opts.reuploadRequest, sock.updateMediaMessage);
+});

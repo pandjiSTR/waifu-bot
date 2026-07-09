@@ -32,7 +32,10 @@ const PDF_TEXT_LIMIT = 8000;
  */
 export async function getMediaBuffer(sock, message) {
   try {
-    const buf = await sock.downloadMediaMessage(message, 'buffer', {});
+    const buf = await sock.downloadMediaMessage(
+      message, 'buffer', {},
+      { reuploadRequest: sock.updateMediaMessage }
+    );
     return buf || null;
   } catch (err) {
     logger.warn({ err }, 'getMediaBuffer failed');

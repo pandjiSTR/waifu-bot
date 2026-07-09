@@ -153,3 +153,22 @@ test('buildSystemPrompt handles null redis gracefully', async () => {
   assert.match(prompt, /\[SYSTEM: Persona\]/);
   assert.match(prompt, /\(no personality loaded\)/);
 });
+
+test('applyOwnerName substitutes {OWNER_NAME} with env value', () => {
+  process.env.OWNER_NAME = 'Panji';
+  assert.strictEqual(personality.applyOwnerName('Halo {OWNER_NAME}'), 'Halo Panji');
+});
+
+test('applyOwnerName leaves text without placeholder unchanged', () => {
+  process.env.OWNER_NAME = 'Panji';
+  assert.strictEqual(personality.applyOwnerName('halo'), 'halo');
+});
+
+test('buildSystemPrompt applies owner name from saved persona', async () => {
+  process.env.OWNER_NAME = 'Panji';
+  const redis = createFakeRedis();
+  await personality.savePersonality(redis, 'Base {OWNER_NAME}');
+  const prompt = await personality.buildSystemPrompt(redis);
+  assert.match(prompt, /Panji/);
+  assert.doesNotMatch(prompt, /\{OWNER_NAME\}/);
+});

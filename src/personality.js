@@ -11,6 +11,12 @@ const __dirname = dirname(__filename);
 const PERSONALITY_KEY = 'waifu:personality';
 const PERSONALITY_FILE = join(__dirname, '..', 'personality.txt');
 
+// Substitute the {OWNER_NAME} placeholder with the configured display name so
+// the LLM sees the real owner name instead of the literal token.
+export function applyOwnerName(text) {
+  return String(text ?? '').replaceAll('{OWNER_NAME}', process.env.OWNER_NAME || 'Owner');
+}
+
 /**
  * Load personality content:
  * 1. Try Redis key `waifu:personality`
@@ -21,30 +27,33 @@ const PERSONALITY_FILE = join(__dirname, '..', 'personality.txt');
  */
 export async function loadPersonality(redis) {
   try {
-    // Try Redis first
+    // File is the source of truth. Prefer it and reseed the Redis cache from
+    // it so personality.txt edits take effect on the next start (cache self-heals).
+    // Fall back to the cache only if the file is unreadable/empty.
+    let fileContent = '';
+    try {
+      fileContent = await readFile(PERSONALITY_FILE, 'utf-8');
+    } catch (err) {
+      logger.warn({ err }, 'Failed to read personality.txt, falling back to cache');
+    }
+
+    if (fileContent && fileContent.trim()) {
+      const substituted = applyOwnerName(fileContent);
+      if (redis) {
+        await redis.set(PERSONALITY_KEY, substituted).catch(() => {});
+      }
+      return substituted;
+    }
+
     if (redis) {
       const cached = await redis.get(PERSONALITY_KEY);
       if (cached) {
-        logger.info('Personality loaded from Redis');
-        return cached;
+        logger.info('Personality loaded from Redis (file fallback)');
+        return applyOwnerName(cached);
       }
     }
 
-    // Fallback to local file
-    const fileContent = await readFile(PERSONALITY_FILE, 'utf-8');
-    if (fileContent) {
-      logger.info('Personality loaded from local file');
-
-      // Auto-seed Redis if available
-      if (redis) {
-        await redis.set(PERSONALITY_KEY, fileContent);
-        logger.info('Personality seeded to Redis from local file');
-      }
-
-      return fileContent;
-    }
-
-    logger.warn('Personality content is empty in both Redis and local file');
+    logger.warn('Personality content is empty in both file and Redis');
     return '';
   } catch (err) {
     logger.error({ err }, 'Failed to load personality');
@@ -60,7 +69,7 @@ export async function getPersonalityContent(redis) {
   if (!redis) return '';
   try {
     const content = await redis.get(PERSONALITY_KEY);
-    return content || '';
+    return content ? applyOwnerName(content) : '';
   } catch (err) {
     logger.error({ err }, 'Failed to get personality from Redis');
     return '';
@@ -98,6 +107,7 @@ export async function buildSystemPrompt(redis, context = '', facts = '', mood = 
   let personality = '';
   try {
     personality = await getPersonalityContent(redis);
+    personality = applyOwnerName(personality);
 
     const sections = [];
 
