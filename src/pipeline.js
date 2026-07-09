@@ -16,7 +16,7 @@ import { getFriendMemory, addFact, setMood } from './memory.js';
 // (persona strings live only in personality.txt per AGENTS.md #1).
 const BADWORD_TONE_INSTRUCTION = 'Tanggapi dengan nada sarkastik.';
 
-const MULTI_MESSAGE_INSTRUCTION = `\n\nKalau balasan PANJANG (banyak poin/cerita/penjelasan), pisahkan jadi beberapa chat terpisah yang natural pakai delimiter "|||" atau paragraph baru. Tiap bagian harus berdiri sendiri dan nyambung. TAPI kalau cuma ngobrol pendek, kirim 1 chat utuh — JANGAN pecah tiap baris.`;
+const MULTI_MESSAGE_INSTRUCTION = `\n\nKalau balasan PANJANG (banyak poin/cerita/penjelasan), pisahkan jadi beberapa chat terpisah pakai paragraph baru (dua baris kosong). Tiap bagian harus berdiri sendiri dan nyambung. TAPI kalau cuma ngobrol pendek, kirim 1 chat utuh — JANGAN pecah tiap baris.`;
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
@@ -553,7 +553,7 @@ export async function processLLM(body, ctx) {
   const LONG_REPLY_THRESHOLD = 100;
   const segments =
     reply.length >= LONG_REPLY_THRESHOLD
-      ? reply.split(/\n\n|\s*\|\|\|\s*/).map((s) => s.trim()).filter(Boolean)
+      ? reply.split(/\n\n/).map((s) => s.trim()).filter(Boolean)
       : [reply.trim()].filter(Boolean);
 
   let deliveryFailed = false;

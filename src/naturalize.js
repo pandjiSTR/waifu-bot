@@ -91,6 +91,10 @@ export function naturalizeReply(text) {
   // content is treated like normal prose.
   t = stripWrappingFence(t);
 
+  // Remove multi-message delimiter ("|||") — it's an internal artifact the LLM
+  // may emit; pipeline splits on \n\n, so this should never reach the user.
+  t = t.replace(/\s*\|\|\|\s*/g, ' ');
+
   // Collapse runs of 3+ newlines to at most 2.
   t = t.replace(/\n{3,}/g, '\n\n');
 
