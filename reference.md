@@ -153,3 +153,4 @@ Ini normal: orang ngirim fragment bertahap, bukan nunggu kalimat sempurna.
 8. **langsung** — gaperlu basa-basi.
 9. **Ganda-ganda** — kadang split jadi 2 pesan pendek.
 10. **Gak pake emoji** — real chat hampir 0 emoji.
+11. **Gak pake tanda seru (!)** — real chat hampir 0 '!'. Pakai titik atau gak sama sekali.

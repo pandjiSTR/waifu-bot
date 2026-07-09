@@ -368,6 +368,14 @@ export async function processLLM(body, ctx) {
 
   const window = await getWindow(ctx.redis, userId, isGroup);
 
+  // Resolve display names for context clarity (group-awareness). Falls back
+  // to raw JIDs when redis is unavailable or names aren't populated.
+  let nameMap = {};
+  if (ctx.redis && typeof ctx.redis.hgetall === 'function') {
+    try { nameMap = await ctx.redis.hgetall('waifu:friends:names') || {}; } catch { /* ignore */ }
+  }
+  const resolveName = (jid) => (nameMap && nameMap[jid]) || jid;
+
   // Cross-reply laugh control: if Ara already laughed in her recent messages,
   // suppress laughs in this reply too (max 0). Otherwise allow at most one.
   // This keeps laughs rare across a conversation instead of every reply.
@@ -380,7 +388,7 @@ export async function processLLM(body, ctx) {
     .map((m) =>
       m.sender === '__summary__'
         ? '[RINGKASAN]\n' + m.text
-        : `${m.sender}: ${m.text}`
+        : `${resolveName(m.sender)}: ${m.text}`
     )
     .join('\n');
 

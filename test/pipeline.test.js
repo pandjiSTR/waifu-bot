@@ -1019,3 +1019,51 @@ test('processLLM memory extraction: fire-and-forget handles null Redis gracefull
   assert.strictEqual(callCount, 1);
 });
 
+test('processLLM resolves display names from waifu:friends:names in group context', async () => {
+  const captured = [];
+
+  const fakeRedis = {
+    async hgetall(key) {
+      if (key === 'waifu:friends:names') return { 'budi@s.whatsapp.net': 'Budi', 'rehan@wpp': 'Rehan' };
+      return {};
+    },
+    async lrange(key) {
+      if (key === 'waifu:grup:group@s.whatsapp.net') {
+        return [
+          JSON.stringify({ sender: 'ara', text: 'oke', timestamp: '' }),
+          JSON.stringify({ sender: 'budi@s.whatsapp.net', text: 'Ngelek bat dah', timestamp: '' }),
+          JSON.stringify({ sender: 'rehan@wpp', text: 'anjay', timestamp: '' }),
+        ];
+      }
+      return [];
+    },
+    async get() { return null; },
+    async del() { return 1; },
+    async set() { return 'OK'; },
+    async lpush() { return 1; },
+    async ltrim() { return 1; },
+    async expire() { return 1; },
+  };
+
+  const ctx = {
+    jid: 'group@s.whatsapp.net',
+    isGroup: true,
+    sender: 'budi@s.whatsapp.net',
+    redis: fakeRedis,
+    llm: {
+      chat: async (msgs) => { captured.push(msgs); return 'oke'; },
+    },
+    sock: { user: { id: 'ara@s.whatsapp.net' }, sendMessage: async () => {} },
+    message: { key: { remoteJid: 'group@s.whatsapp.net', participant: 'budi@s.whatsapp.net' } },
+  };
+
+  await pipeline.processLLM('apa kabar', ctx);
+  assert.ok(captured.length > 0, 'LLM should have been called');
+  const sys = captured[0].find((m) => m.role === 'system').content;
+  // Display names "Budi" / "Rehan" should appear in the resolved context,
+  // not raw JIDs.
+  assert.match(sys, /Budi/);
+  assert.match(sys, /Rehan/);
+  assert.doesNotMatch(sys, /budi@s\.whatsapp\.net/, 'raw JID should not appear in context');
+});
+

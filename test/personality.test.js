@@ -172,3 +172,11 @@ test('buildSystemPrompt applies owner name from saved persona', async () => {
   assert.match(prompt, /Panji/);
   assert.doesNotMatch(prompt, /\{OWNER_NAME\}/);
 });
+
+test('buildSystemPrompt includes no-exclamation directive from personality.txt', async () => {
+  const redis = createFakeRedis();
+  const content = await personality.loadPersonality(redis);
+  assert.ok(content.length > 0, 'personality should be loaded');
+  const prompt = await personality.buildSystemPrompt(redis);
+  assert.match(prompt, /tanda seru/, 'system prompt should contain the no-exclamation rule');
+});

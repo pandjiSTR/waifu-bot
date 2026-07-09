@@ -5,7 +5,7 @@ import { isOpen } from './circuit.js';
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
 const PRIVATE_MAX = parseInt(process.env.MAX_CONTEXT_MESSAGES || '30', 10);
-const GROUP_MAX = parseInt(process.env.MAX_GROUP_CONTEXT_MESSAGES || '30', 10);
+const GROUP_MAX = parseInt(process.env.MAX_GROUP_CONTEXT_MESSAGES || '60', 10);
 const GROUP_TTL_S = parseInt(process.env.GROUP_CTX_TTL_DAYS || '7', 10) * 86400;
 const PRIVATE_TTL_S = 86400;
 
@@ -196,7 +196,7 @@ export async function getSummary(redis, userId, isGroup = false) {
 export async function summarizeContext(redis, userId, isGroup = false) {
   // Summarization is OFF by default; opt in via ENABLE_CONTEXT_SUMMARY=true.
   // Keeps latency low and avoids extra LLM calls unless explicitly enabled.
-  if (process.env.ENABLE_CONTEXT_SUMMARY !== 'true') return;
+  if (process.env.ENABLE_CONTEXT_SUMMARY === 'false') return;
 
   // Distributed lock: prevent concurrent summarization for the same user.
   // If another process already holds the lock, skip this turn.
