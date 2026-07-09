@@ -7,6 +7,7 @@ import assert from 'node:assert';
 // Default module: no BLACKLIST / WHITELIST env set.
 const pipeline = await import('../src/pipeline.js');
 const { stopSweeper } = pipeline;
+const media = await import('../src/media.js');
 
 function makeCtx(overrides = {}) {
   return {
@@ -531,6 +532,8 @@ test('processLLM intercepts sticker requests and does NOT call the LLM', async (
   let llmChatCalled = false;
   let sentSticker = null;
 
+  media.__setDownloadForTest(async () => png);
+
   const ctx = {
     jid: 'stick@s.whatsapp.net',
     isGroup: false,
@@ -538,7 +541,6 @@ test('processLLM intercepts sticker requests and does NOT call the LLM', async (
     redis: null,
     sock: {
       user: { id: '6285000000000@s.whatsapp.net' },
-      downloadMediaMessage: async () => png,
       sendMessage: async (jid, { sticker }) => {
         sentSticker = sticker;
       },

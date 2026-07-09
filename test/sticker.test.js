@@ -1,14 +1,16 @@
 // Tests for src/sticker.js — fully offline. Uses REAL Sharp on a tiny generated
 // PNG so we exercise the actual 512x512 WebP conversion (no network/FFmpeg).
-import { test, before } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import sharp from 'sharp';
 
 let stickerMod;
 let pngBuffer;
+let media;
 
 before(async () => {
   stickerMod = await import('../src/sticker.js');
+  media = await import('../src/media.js');
   // Generate a small solid-color PNG to feed into makeSticker.
   pngBuffer = await sharp({
     create: { width: 120, height: 80, channels: 3, background: { r: 200, g: 40, b: 90 } },
@@ -18,11 +20,15 @@ before(async () => {
   assert.ok(pngBuffer.length > 0);
 });
 
+after(() => {
+  media.__setDownloadForTest(null);
+});
+
 test('makeSticker returns a 512x512 WebP buffer from a PNG', async () => {
-  const sock = { downloadMediaMessage: async () => pngBuffer };
+  media.__setDownloadForTest(async () => pngBuffer);
   const msg = { message: { imageMessage: {} } };
 
-  const out = await stickerMod.makeSticker(sock, msg);
+  const out = await stickerMod.makeSticker({}, msg);
   assert.ok(Buffer.isBuffer(out), 'result should be a Buffer');
   // WebP magic: "RIFF" at 0..4 and "WEBP" at 8..12.
   assert.strictEqual(out.slice(0, 4).toString('latin1'), 'RIFF');
@@ -30,14 +36,12 @@ test('makeSticker returns a 512x512 WebP buffer from a PNG', async () => {
 });
 
 test('makeSticker is graceful (returns null) when download fails', async () => {
-  const sock = {
-    downloadMediaMessage: async () => {
-      throw new Error('download failed');
-    },
-  };
+  media.__setDownloadForTest(async () => {
+    throw new Error('download failed');
+  });
   const msg = { message: { imageMessage: {} } };
 
-  const out = await stickerMod.makeSticker(sock, msg);
+  const out = await stickerMod.makeSticker({}, msg);
   assert.strictEqual(out, null);
 });
 
@@ -48,8 +52,7 @@ test('STICKER_META exposes the PRD §5.3 pack/publisher labels', () => {
 
 // T4: Animated sticker — fallback to Sharp when FFmpeg is not installed
 test('makeSticker falls back to static Sharp when FFmpeg not found for animated input', async () => {
-  // Simulate a GIF mimetype — FFmpeg will fail with ENOENT, falling back to Sharp.
-  const sock = { downloadMediaMessage: async () => pngBuffer };
+  media.__setDownloadForTest(async () => pngBuffer);
   const msg = {
     message: {
       imageMessage: {
@@ -58,7 +61,7 @@ test('makeSticker falls back to static Sharp when FFmpeg not found for animated 
     },
   };
 
-  const out = await stickerMod.makeSticker(sock, msg);
+  const out = await stickerMod.makeSticker({}, msg);
   // Should fall back to Sharp and produce a valid WebP
   assert.ok(Buffer.isBuffer(out), 'result should be a Buffer');
   assert.strictEqual(out.slice(0, 4).toString('latin1'), 'RIFF');
@@ -66,7 +69,7 @@ test('makeSticker falls back to static Sharp when FFmpeg not found for animated 
 });
 
 test('makeSticker with video mimetype also falls back to Sharp when FFmpeg not found', async () => {
-  const sock = { downloadMediaMessage: async () => pngBuffer };
+  media.__setDownloadForTest(async () => pngBuffer);
   const msg = {
     message: {
       videoMessage: {
@@ -75,7 +78,7 @@ test('makeSticker with video mimetype also falls back to Sharp when FFmpeg not f
     },
   };
 
-  const out = await stickerMod.makeSticker(sock, msg);
+  const out = await stickerMod.makeSticker({}, msg);
   assert.ok(Buffer.isBuffer(out), 'result should be a Buffer');
   assert.strictEqual(out.slice(0, 4).toString('latin1'), 'RIFF');
   assert.strictEqual(out.slice(8, 12).toString('latin1'), 'WEBP');

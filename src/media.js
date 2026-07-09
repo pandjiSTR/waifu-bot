@@ -8,10 +8,15 @@
 // instruction (describe the image), matching AGENTS.md #1.
 
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { downloadMediaMessage as baileysDownload } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { chat } from './llm.js';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
+
+// Test seam — allows tests to inject a fake downloader without touching real media.
+let _download = baileysDownload;
+export function __setDownloadForTest(fn) { _download = fn; }
 
 // Neutral fallback when vision is unavailable. No persona voice (AGENTS.md #1).
 const VISION_FALLBACK = 'Maaf, aku belum bisa lihat gambar itu sekarang.';
@@ -32,7 +37,7 @@ const PDF_TEXT_LIMIT = 8000;
  */
 export async function getMediaBuffer(sock, message) {
   try {
-    const buf = await sock.downloadMediaMessage(
+    const buf = await _download(
       message, 'buffer', {},
       { reuploadRequest: sock.updateMediaMessage }
     );

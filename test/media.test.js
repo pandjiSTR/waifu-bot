@@ -1,6 +1,6 @@
 // Tests for src/media.js — fully offline.
-//  - describeImage: fake sock.downloadMediaMessage + fake Ollama client (via
-//    llm.__setClientForTest seam). No network / Redis.
+//  - describeImage: fake downloadMediaMessage via media.__setDownloadForTest +
+//    fake Ollama client (via llm.__setClientForTest seam). No network / Redis.
 //  - extractPdfText: a real tiny PDF fixture generated in-process.
 import { test, after, before } from 'node:test';
 import assert from 'node:assert';
@@ -17,6 +17,7 @@ before(async () => {
 });
 
 after(() => {
+  media.__setDownloadForTest(null);
   llm.__setClientForTest(null);
   circuit.__reset();
 });
@@ -60,9 +61,9 @@ test('describeImage returns a description using a fake client', async () => {
     },
   });
 
-  const sock = {
-    downloadMediaMessage: async () => Buffer.from('fake-image-bytes'),
-  };
+  media.__setDownloadForTest(async () => Buffer.from('fake-image-bytes'));
+
+  const sock = {};
   const msg = { message: { imageMessage: { caption: 'apa ini?' } } };
 
   const out = await media.describeImage(sock, msg, 'apa ini?');
@@ -76,11 +77,11 @@ test('describeImage returns neutral fallback when download fails', async () => {
       return { message: { content: 'should-not-be-used' } };
     },
   });
-  const sock = {
-    downloadMediaMessage: async () => {
-      throw new Error('download failed');
-    },
-  };
+  media.__setDownloadForTest(async () => {
+    throw new Error('download failed');
+  });
+
+  const sock = {};
   const msg = { message: { imageMessage: {} } };
 
   const out = await media.describeImage(sock, msg, '');
@@ -100,27 +101,26 @@ test('extractPdfText returns empty string on invalid input', async () => {
 });
 
 test('getMediaBuffer returns null on download failure', async () => {
-  const sock = {
-    downloadMediaMessage: async () => {
-      throw new Error('boom');
-    },
-  };
-  const out = await media.getMediaBuffer(sock, { message: {} });
+  media.__setDownloadForTest(async () => {
+    throw new Error('boom');
+  });
+  const out = await media.getMediaBuffer({}, { message: {} });
   assert.strictEqual(out, null);
 });
 
 test('getMediaBuffer passes reuploadRequest option to download', async () => {
-  const sock = {
-    updateMediaMessage: () => {},
-    downloadMediaMessage: (...args) => {
-      sock.__callArgs = args;
-      return Buffer.from('img');
-    },
-  };
+  let capturedArgs;
+  const fakeUpdate = () => {};
+  media.__setDownloadForTest((...args) => {
+    capturedArgs = args;
+    return Buffer.from('img');
+  });
+
+  const sock = { updateMediaMessage: fakeUpdate };
   const out = await media.getMediaBuffer(sock, {});
   assert.ok(Buffer.isBuffer(out));
   assert.strictEqual(out.toString(), 'img');
-  const opts = sock.__callArgs[3];
+  const opts = capturedArgs[3];
   assert.ok(opts && typeof opts === 'object');
-  assert.strictEqual(opts.reuploadRequest, sock.updateMediaMessage);
+  assert.strictEqual(opts.reuploadRequest, fakeUpdate);
 });
