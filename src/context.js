@@ -87,6 +87,61 @@ export async function addMessage(redis, userId, msg, isGroup = false) {
 }
 
 /**
+ * Replace the most recent message matching `sender` in the sliding window.
+ * Used to enrich a user's caption with media context ([GAMBAR]/[PDF]) after the
+ * description is extracted, so follow-up turns see it.
+ * @param {object|null} redis
+ * @param {string} userId
+ * @param {string} sender   // e.g. the user's sender id (ctx.sender)
+ * @param {string} newText
+ * @param {boolean} [isGroup=false]
+ * @returns {Promise<void>}
+ */
+export async function replaceLastMessage(redis, userId, sender, newText, isGroup = false) {
+  const key = keyFor(userId, isGroup);
+  const max = maxFor(isGroup);
+
+  if (redis) {
+    try {
+      const raw = await redis.lrange(key, 0, -1); // newest-first
+      const idx = raw.findIndex((s) => {
+        try {
+          return JSON.parse(s).sender === sender;
+        } catch {
+          return false;
+        }
+      });
+      if (idx === -1) return;
+      const old = JSON.parse(raw[idx]);
+      raw[idx] = JSON.stringify({ ...old, text: newText });
+      await redis.del(key);
+      if (raw.length) await redis.rpush(key, raw); // restore oldest-first
+      await redis.ltrim(key, 0, max - 1);
+      if (isGroup) await redis.expire(key, ttlFor(true));
+    } catch (err) {
+      logger.warn({ err, userId }, 'replaceLastMessage redis failed');
+    }
+    return;
+  }
+
+  // In-memory fallback
+  const arr = memWindows.get(userId) || [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    let m;
+    try {
+      m = JSON.parse(arr[i]);
+    } catch {
+      continue;
+    }
+    if (m.sender === sender) {
+      arr[i] = JSON.stringify({ ...m, text: newText });
+      break;
+    }
+  }
+  memWindows.set(userId, arr);
+}
+
+/**
  * Return the sliding window as a CHRONOLOGICAL array (oldest -> newest).
  * Merges the stored summary (if any) as a synthetic leading context entry.
  * @param {object|null} redis

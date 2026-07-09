@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
-import { addMessage, getWindow, summarizeContext } from './context.js';
+import { addMessage, getWindow, summarizeContext, replaceLastMessage } from './context.js';
 import { sendChunks } from './chunks.js';
 import { naturalizeReply } from './naturalize.js';
 import { isOpen, remainingMs, onTrip, onClose } from './circuit.js';
@@ -15,6 +15,8 @@ import { getFriendMemory, addFact, setMood } from './memory.js';
 // tone to sarcastic. This is a TASK instruction (behavior), not persona voice
 // (persona strings live only in personality.txt per AGENTS.md #1).
 const BADWORD_TONE_INSTRUCTION = 'Tanggapi dengan nada sarkastik.';
+
+const MULTI_MESSAGE_INSTRUCTION = `\n\nKadang, kalau ada hal lanjutan yang natural (oh ya, btw, info tambahan), pisahkan respons jadi 2 chat terpisah pakai delimiter "|||". Jangan dipaksa kalau 1 chat cukup. Tiap bagian harus berdiri sendiri dan nyambung.`;
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
@@ -49,7 +51,6 @@ const WHITELIST = (process.env.WHITELIST || '')
   .split(',')
   .map(normalizeNumber)
   .filter(Boolean);
-const COMMAND_PREFIX = 'ara'; // lowercase trigger word for groups / owner commands
 
 // In-memory dedup: messageId -> expiry timestamp (1 min TTL, per PRD §6.2).
 // TODO: persist dedup in Redis for multi-instance (§14 rate-limiting area).
@@ -184,7 +185,7 @@ export async function shouldProcess(body, ctx) {
       Array.isArray(mentioned) && mentioned.includes(botJid);
     const quotedBot = Boolean(contextInfo?.quotedMessage);
     const bodyLower = String(body).toLowerCase();
-    if (!mentionedBot && !quotedBot && !bodyLower.includes(COMMAND_PREFIX)) {
+    if (!mentionedBot && !quotedBot && !/\bara+/i.test(bodyLower)) {
       return false;
     }
   }
@@ -348,6 +349,7 @@ export async function processLLM(body, ctx) {
   if (ctx.badword) {
     systemPrompt += '\n\n' + BADWORD_TONE_INSTRUCTION;
   }
+  systemPrompt += MULTI_MESSAGE_INSTRUCTION;
 
   // Build the LLM message list from the window returned by getWindow, which
   // ALREADY includes the current user message (persisted above via addMessage).
@@ -392,8 +394,8 @@ export async function processLLM(body, ctx) {
 
   // Prepend media context to the current (last) user turn so the model sees it
   // alongside the user's text. If no user turn exists, append a synthetic one.
+  let target = -1;
   if (mediaContext) {
-    let target = -1;
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'user') {
         target = i;
@@ -405,6 +407,12 @@ export async function processLLM(body, ctx) {
     } else {
       messages.push({ role: 'user', content: mediaContext });
     }
+  }
+
+  // Persist enriched media context back to Redis so follow-up turns see it.
+  if (mediaContext && target >= 0 && ctx.redis) {
+    replaceLastMessage(ctx.redis, userId, ctx.sender, messages[target].content, isGroup)
+      .catch(() => {});
   }
 
   // Fase 5 (§6.3): if the circuit breaker is open, skip the LLM call entirely
@@ -524,13 +532,25 @@ export async function processLLM(body, ctx) {
   // Fase 4: normalize (generic, persona-agnostic) before delivery.
   reply = naturalizeReply(reply);
 
-  // Reliable chunked delivery with per-chunk retry (PRD §5.7 / §6.2).
-  const delivery = await sendChunks(ctx.sock, userId, reply, {
-    sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
-  });
+  // Split into natural segments: paragraphs OR explicit ||| delimiter
+  const segments = reply
+    .split(/\n\n|\s*\|\|\|\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  if (delivery.failed) {
-    logger.warn({ delivery }, 'sendChunks failed to deliver all chunks');
+  let deliveryFailed = false;
+  for (let i = 0; i < segments.length; i++) {
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, 1500));
+      await ctx.sock?.sendPresenceUpdate?.('composing', userId).catch?.(() => {});
+    }
+    const delivery = await sendChunks(ctx.sock, userId, segments[i], {
+      sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
+    });
+    if (delivery.failed) {
+      deliveryFailed = true;
+      logger.warn({ delivery }, 'sendChunks failed for segment');
+    }
   }
 
   // Context for the bot reply is saved AFTER delivery (PRD §6.2).
@@ -543,7 +563,7 @@ export async function processLLM(body, ctx) {
       sender: 'ara',
       text: reply,
       timestamp: new Date().toISOString(),
-      incomplete: delivery.failed,
+      incomplete: deliveryFailed,
     },
     isGroup
   );

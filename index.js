@@ -277,8 +277,7 @@ export async function main() {
       return;
     }
 
-    // HEAD: treat as GET internally, strip body at the end
-    const isHead = req.method === 'HEAD';
+    // HEAD: handled above (204 early return); below is GET/POST only
 
     // Parse URL
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);

@@ -1,7 +1,6 @@
 import pino from 'pino';
 import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
-import { sendChunks } from './chunks.js';
 import { getWindow } from './context.js';
 
 const logger = pino({ name: 'autochat', level: process.env.LOG_LEVEL || 'warn' });
@@ -140,7 +139,8 @@ export async function maybeProactive(ctx) {
     const taskInstruction =
       'Kirim SATU pesan proaktif singkat kepada owner seolah Ara memulai obrolan. ' +
       '1-3 kata, natural ala WA Indonesia, tanpa emoji. ' +
-      'Jangan setiap saat — hanya kalau relevan/ringan.';
+      'Jangan mulai dengan hai/halo. Jangan tanya soal skripsi/jurnal/tugas kuliah. ' +
+      '1 kalimat aja.';
 
     const chatFn = ctx.chat || chat;
     const text = await chatFn(
@@ -152,8 +152,12 @@ export async function maybeProactive(ctx) {
     );
 
     if (text) {
-      const chunksFn = ctx.sendChunks || sendChunks;
-      await chunksFn(sock, ownerJid, text);
+      const { naturalizeReply } = await import('./naturalize.js');
+      const { sendChunks: realChunksFn } = await import('./chunks.js');
+      const chunksFn = ctx.sendChunks || realChunksFn;
+      const normalized = naturalizeReply(text);
+      await sock?.sendPresenceUpdate?.('composing', ownerJid).catch?.(() => {});
+      await chunksFn(sock, ownerJid, normalized);
 
       // Update last-sent timestamp
       if (redis) {
