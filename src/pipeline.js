@@ -16,7 +16,7 @@ import { getFriendMemory, addFact, setMood } from './memory.js';
 // (persona strings live only in personality.txt per AGENTS.md #1).
 const BADWORD_TONE_INSTRUCTION = 'Tanggapi dengan nada sarkastik.';
 
-
+const MULTI_MESSAGE_INSTRUCTION = `\n\nFORMAT BALASAN: Baris kosong (dua enter) = pesan/bubble baru yang kepisah. Pakai baris kosong CUMA kalau emang mau misahin poin/topik beda (misal list panjang, penjelasan bertahap). Balasan pendek/santai/ngobrol biasa: tetap 1 bubble, JANGAN kasih baris kosong. Jangan pernah ada baris kosong yang gak disengaja.`;
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
@@ -403,6 +403,7 @@ export async function processLLM(body, ctx) {
   if (ctx.badword) {
     systemPrompt += '\n\n' + BADWORD_TONE_INSTRUCTION;
   }
+  systemPrompt += MULTI_MESSAGE_INSTRUCTION;
 
 
   // Build the LLM message list from the window returned by getWindow, which
@@ -587,17 +588,25 @@ export async function processLLM(body, ctx) {
   reply = naturalizeReply(reply);
   reply = guardLaughs(reply, { max: araRecentLaughed ? 0 : 1 });
 
-  // Send entire reply as a single bubble. Short replies (typical Ara output)
-  // stay compact; long replies are only split by the chunking layer if they
-  // exceed WhatsApp's message size limit (1800 chars default).
+  // Split on every \n\n — each paragraph becomes its own WhatsApp bubble.
+  // The LLM controls bubble structure via blank lines; short banter stays as
+  // 1 bubble, multi-part replies naturally separate.
+  const segments = reply.split(/\n\n/).map((s) => s.trim()).filter(Boolean);
+
   let deliveryFailed = false;
-  const delivery = await sendChunks(ctx.sock, userId, reply, {
-    sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
-  });
-  if (delivery.ids) delivery.ids.forEach(trackBotMessage);
-  if (delivery.failed) {
-    deliveryFailed = true;
-    logger.warn({ delivery }, 'sendChunks failed');
+  for (let i = 0; i < segments.length; i++) {
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, 1500));
+      await ctx.sock?.sendPresenceUpdate?.('composing', userId).catch?.(() => {});
+    }
+    const delivery = await sendChunks(ctx.sock, userId, segments[i], {
+      sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
+    });
+    if (delivery.ids) delivery.ids.forEach(trackBotMessage);
+    if (delivery.failed) {
+      deliveryFailed = true;
+      logger.warn({ delivery }, 'sendChunks failed for segment');
+    }
   }
 
   // Context for the bot reply is saved AFTER delivery (PRD §6.2).

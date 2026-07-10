@@ -451,6 +451,59 @@ test('processLLM sends reply without duplicating the current message', async () 
   assert.strictEqual(nonSystem[0].content, 'hai');
 });
 
+test('processLLM splits reply on \\n\\n — each paragraph is a separate bubble', async () => {
+  const sent = [];
+  const ctx = {
+    jid: 'jabber@s.whatsapp.net',
+    from: 'x',
+    isGroup: false,
+    sender: 'x',
+    pushName: 'T',
+    redis: null,
+    llm: {
+      chat: async () => 'Intro\n\nPoint A\n\nPoint B',
+      summarize: async () => 'sum',
+    },
+    sock: {
+      sendMessage: async (jid, { text }) => { sent.push(text); },
+      sendPresenceUpdate: async () => {},
+    },
+  };
+
+  await pipeline.processLLM('test', ctx);
+
+  // 3 non-empty segments after split on \n\n, trim, filter
+  assert.strictEqual(sent.length, 3, 'each \\n\\n-separated paragraph should be its own bubble');
+  assert.strictEqual(sent[0], 'Intro');
+  assert.strictEqual(sent[1], 'Point A');
+  assert.strictEqual(sent[2], 'Point B');
+});
+
+test('processLLM keeps single-line reply as 1 bubble', async () => {
+  const sent = [];
+  const ctx = {
+    jid: 'jabber@s.whatsapp.net',
+    from: 'x',
+    isGroup: false,
+    sender: 'x',
+    pushName: 'T',
+    redis: null,
+    llm: {
+      chat: async () => 'Gak jadi. Males.',
+      summarize: async () => 'sum',
+    },
+    sock: {
+      sendMessage: async (jid, { text }) => { sent.push(text); },
+      sendPresenceUpdate: async () => {},
+    },
+  };
+
+  await pipeline.processLLM('tes', ctx);
+
+  assert.strictEqual(sent.length, 1, 'no \\n\\n means single bubble');
+  assert.strictEqual(sent[0], 'Gak jadi. Males.');
+});
+
 // ───────────────────────── badword (Fase 8 leftover, §5.7) ─────────────────────────
 
 test('shouldProcess flags badword but does NOT block the message', async () => {
