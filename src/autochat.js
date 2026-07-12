@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
-import { getWindow } from './context.js';
+import { getWindow, addMessage } from './context.js';
 
 const logger = pino({ name: 'autochat', level: process.env.LOG_LEVEL || 'warn' });
 
@@ -161,6 +161,14 @@ export async function maybeProactive(ctx) {
       const normalized = guardLaughs(naturalizeReply(text));
       await sock?.sendPresenceUpdate?.('composing', ownerJid).catch?.(() => {});
       await chunksFn(sock, ownerJid, normalized);
+
+      // Save to context so Ara remembers sending this and next tick
+      // generates a different message (not repeated).
+      await addMessage(redis, ownerJid, {
+        sender: 'ara',
+        text: normalized,
+        timestamp: new Date().toISOString(),
+      }, false);
 
       // Update last-sent timestamp
       if (redis) {

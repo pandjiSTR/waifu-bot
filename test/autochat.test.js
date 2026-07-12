@@ -7,12 +7,16 @@ import assert from 'node:assert';
 // Fake redis for tests.
 function makeFakeRedis(seed = {}) {
   const store = { ...seed };
+  const lists = {};
   return {
     store,
+    lists,
     get: async (key) => store[key] ?? null,
     set: async (key, val) => { store[key] = String(val); },
-    lrange: async () => [],
-    ltrim: async () => {},
+    lpush: async (key, val) => { if (!lists[key]) lists[key] = []; lists[key].unshift(val); },
+    lrange: async (key) => lists[key] || [],
+    ltrim: async (key, start, stop) => { if (lists[key]) lists[key] = lists[key].slice(start, stop + 1); },
+    expire: async () => {},
   };
 }
 
@@ -108,6 +112,14 @@ test('maybeProactive sends a message when auto-chat is enabled', async () => {
 
   // The last-sent timestamp should be stored.
   assert.ok(redis.store['waifu:autochat:last'], 'last timestamp should be set');
+
+  // The auto-chat message should be saved to the owner's context so Ara
+  // remembers sending it (prevents repeated messages and missing self-awareness).
+  const ctxKey = 'waifu:ctx:6285000000000@s.whatsapp.net';
+  assert.ok(redis.lists[ctxKey], 'auto-chat message should be saved to context');
+  const saved = JSON.parse(redis.lists[ctxKey][0]);
+  assert.strictEqual(saved.sender, 'ara');
+  assert.strictEqual(saved.text, 'Halo beb');
 });
 
 test('maybeProactive sends nothing when auto-chat is disabled', async () => {
