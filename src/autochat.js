@@ -157,10 +157,15 @@ export async function maybeProactive(ctx) {
     if (text) {
       const { naturalizeReply, guardLaughs } = await import('./naturalize.js');
       const { sendChunks: realChunksFn } = await import('./chunks.js');
+      const { createTypingPulse } = await import('./typing.js');
       const chunksFn = ctx.sendChunks || realChunksFn;
       const normalized = guardLaughs(naturalizeReply(text));
-      await sock?.sendPresenceUpdate?.('composing', ownerJid).catch?.(() => {});
-      await chunksFn(sock, ownerJid, normalized);
+      const pulse = createTypingPulse((t) => sock?.sendPresenceUpdate?.(t, ownerJid).catch?.(() => {}));
+      try {
+        await chunksFn(sock, ownerJid, normalized);
+      } finally {
+        pulse.stop();
+      }
 
       // Save to context so Ara remembers sending this and next tick
       // generates a different message (not repeated).

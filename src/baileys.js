@@ -9,6 +9,7 @@ import qrcode from 'qrcode-terminal';
 import { shouldProcess, processLLM, extractText } from './pipeline.js';
 import { addMessage } from './context.js';
 import { useRedisAuthState } from './baileys-auth.js';
+import { createDispatcher } from './dispatch.js';
 
 const logger = pino({ name: 'baileys', level: process.env.LOG_LEVEL || 'warn' });
 
@@ -18,6 +19,11 @@ let redis = null;
 // Captured once at connection 'open' so group mention/reply-to-bot detection
 // never depends on ctx.sock.user.id being populated at message-arrival time.
 let botJid = null;
+
+const dispatcher = createDispatcher({
+  processLLM,
+  sendPresenceUpdate: (type, jid) => sock?.sendPresenceUpdate?.(type, jid).catch?.(() => {}),
+});
 
 export function getBotJid() {
   return botJid;
@@ -240,10 +246,7 @@ export async function connectToWhatsApp() {
 
         if (!(await shouldProcess(body, ctx))) continue;
 
-        newSock.sendPresenceUpdate('composing', ctx.jid).catch(() => {});
-
-        await processLLM(body, ctx).catch((err) =>
-          logger.error({ err }, 'processLLM failed'));
+        dispatcher.dispatch(body, ctx);
       } catch (err) {
         logger.error({ err }, 'messages.upsert handler error');
       }

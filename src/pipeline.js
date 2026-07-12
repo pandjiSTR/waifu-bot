@@ -608,7 +608,6 @@ export async function processLLM(body, ctx) {
   for (let i = 0; i < segments.length; i++) {
     if (i > 0) {
       await new Promise((r) => setTimeout(r, 1500));
-      await ctx.sock?.sendPresenceUpdate?.('composing', userId).catch?.(() => {});
     }
     const delivery = await sendChunks(ctx.sock, userId, segments[i], {
       sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
