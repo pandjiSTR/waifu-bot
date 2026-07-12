@@ -4,7 +4,7 @@ export { createTypingPulse };
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
-export function createDispatcher({ processLLM, sendPresenceUpdate }) {
+export function createDispatcher({ processLLM, sendPresenceUpdate, getCurrentSock }) {
   const chains = new Map();
 
   function dispatch(body, ctx) {
@@ -19,6 +19,10 @@ export function createDispatcher({ processLLM, sendPresenceUpdate }) {
 
     const run = entry.tail.then(async () => {
       try {
+        if (getCurrentSock) {
+          const fresh = getCurrentSock();
+          if (fresh) ctx.sock = fresh;
+        }
         await processLLM(body, ctx);
       } catch (err) {
         logger.error({ err }, 'processLLM failed');

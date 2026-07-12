@@ -46,6 +46,20 @@ test('sends composing then paused for the queue', async () => {
   assert.strictEqual(pausedCount, 1, 'should have exactly one paused');
 });
 
+test('getCurrentSock updates ctx.sock before processLLM runs', async () => {
+  const captured = [];
+  let currentSock = { id: 'old' };
+  const p = createDispatcher({
+    processLLM: async (body, ctx) => { captured.push(ctx.sock); },
+    sendPresenceUpdate: () => {},
+    getCurrentSock: () => currentSock,
+  });
+  currentSock = { id: 'new' };
+  p.dispatch('msg', { jid: 'jid-z', sock: { id: 'old' } });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.strictEqual(captured[0].id, 'new', 'ctx.sock should be updated from getCurrentSock');
+});
+
 test('different JIDs are not serialized', async () => {
   const order = [];
   let resolveA;

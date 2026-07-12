@@ -101,7 +101,7 @@ test('scenario: owner asks "masi sayang gak" — warm, identifies as Panji/pacar
   const sys = systemPromptOf(lastMsgs);
   assert.match(sys, /Panji/, 'owner name should be substituted into the prompt');
   assert.match(sys, /pacarnya/, 'relationship to owner should be present');
-  assert.match(sys, /TIDAK ADA/, 'no-limits directive should be present');
+  assert.match(sys, /nolak permintaan/, 'no-refuse directive should be present');
   assert.match(sys, /20 tahun berpendidikan/, 'human-morality clause should be present');
   assert.strictEqual(ctx._sent.at(-1), 'iyaaa sayang, masa tanya lagii');
 });
@@ -137,8 +137,8 @@ test('scenario: sensitive topic — openness directive present, still replies', 
   await pipeline.processLLM('gimana pendapat lo soal isu sensitif X?', ctx);
 
   const sys = systemPromptOf(lastMsgs);
-  assert.match(sys, /TIDAK ADA/, 'no-limits section should be loaded');
-  assert.match(sys, /tanpa menolak/, 'openness (never refuse) directive should be present');
+  assert.match(sys, /nolak permintaan/, 'no-refuse directive should be loaded');
+  assert.match(sys, /gak pernah nolak/, 'openness (never refuse) directive should be present');
   assert.strictEqual(ctx._sent.at(-1), 'menurut gue sih begitu.');
 });
 

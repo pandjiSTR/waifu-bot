@@ -23,6 +23,7 @@ let botJid = null;
 const dispatcher = createDispatcher({
   processLLM,
   sendPresenceUpdate: (type, jid) => sock?.sendPresenceUpdate?.(type, jid).catch?.(() => {}),
+  getCurrentSock: () => sock,
 });
 
 export function getBotJid() {
