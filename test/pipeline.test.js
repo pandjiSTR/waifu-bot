@@ -874,6 +874,60 @@ test('processLLM search loop: max 2 iterations', async () => {
   assert.doesNotMatch(ctx._sent || '', /\[SEARCH:/i);
 });
 
+test('processLLM search loop: drops "tunggu" lead-in when search fails to produce answer', async () => {
+  const ctx = {
+    jid: 'tunggu@s.whatsapp.net',
+    from: 'x',
+    isGroup: false,
+    sender: 'x',
+    pushName: 'T',
+    redis: null,
+    llm: {
+      chat: async () => 'Tunggu ya, aku cari dulu. [SEARCH: cuaca jakarta]',
+      summarize: async () => 'sum',
+    },
+    sock: {
+      sendMessage: async () => {},
+      sendPresenceUpdate: async () => {},
+    },
+    search: async () => '', // returns empty — simulates search failure
+  };
+
+  const mod = await import('../src/pipeline.js?tunggu=1');
+  await mod.processLLM('cuaca jakarta gimana?', ctx);
+});
+
+test('processLLM search loop: strips "tunggu" lead-in, keeps real answer', async () => {
+  const sent = [];
+  const ctx = {
+    jid: 'ok@s.whatsapp.net',
+    from: 'x',
+    isGroup: false,
+    sender: 'x',
+    pushName: 'T',
+    redis: null,
+    llm: {
+      chat: async (msgs) => {
+        const last = msgs[msgs.length - 1].content;
+        if (last.startsWith('[HASIL PENCARIAN]')) return 'Cuaca Jakarta 30 derajat.';
+        return 'Tunggu bentar [SEARCH: cuaca jakarta]';
+      },
+      summarize: async () => 'sum',
+    },
+    sock: {
+      sendMessage: async (jid, { text }) => { sent.push(text); },
+      sendPresenceUpdate: async () => {},
+    },
+    search: async () => '1. Weather (https://weather.com)\nJakarta 30°C',
+  };
+
+  const mod = await import('../src/pipeline.js?tunggu2=1');
+  await mod.processLLM('cuaca jakarta gimana?', ctx);
+
+  assert.strictEqual(sent.length, 1, 'should send one message');
+  assert.strictEqual(sent[0], 'Cuaca Jakarta 30 derajat.', 'should send actual answer not tunggu');
+});
+
 // ───────────────────────── stopSweeper ─────────────────────────
 
 test('stopSweeper exists and does not throw', () => {
