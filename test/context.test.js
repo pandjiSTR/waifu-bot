@@ -42,6 +42,8 @@ function createFakeRedis() {
       return strs.has(key) ? strs.get(key) : null;
     },
     async set(key, val, ...args) {
+      // Record every call so tests can inspect exact call signatures.
+      this._sets.push([key, val, ...args]);
       // Support ioredis-style: set(key, val, 'EX', ttl, 'NX')
       const nx = args.includes('NX');
       if (nx && strs.has(key)) return null; // not acquired
@@ -53,6 +55,7 @@ function createFakeRedis() {
     },
     _lists: lists,
     _strs: strs,
+    _sets: [],
   };
 }
 
@@ -182,4 +185,24 @@ test('summarizeContext skips locking when redis is null (in-memory)', async () =
   await ctx.summarizeContext(null, 'u5', false);
   const summary = await ctx.getSummary(null, 'u5', false);
   assert.match(summary, /SUMMARY_OUTPUT/);
+});
+
+test('summarizeContext uses EX keyword for summary TTL (Redis path)', async () => {
+  process.env.MAX_CONTEXT_MESSAGES = '30';
+  process.env.ENABLE_CONTEXT_SUMMARY = 'true';
+  const ctx = await import('../src/context.js?sumfix');
+  const redis = createFakeRedis();
+
+  for (let i = 0; i < 30; i++) {
+    await ctx.addMessage(redis, 'u-sumfix', { sender: 'a', text: 'm' + i }, false);
+  }
+
+  await ctx.summarizeContext(redis, 'u-sumfix', false);
+
+  const recorded = redis._sets.find(
+    (s) => s[0] === 'waifu:ctx_summary:u-sumfix'
+  );
+  assert.ok(recorded, 'expected a redis.set call for the summary key');
+  assert.strictEqual(recorded[2], 'EX', '3rd positional arg must be the EX keyword');
+  assert.strictEqual(typeof recorded[3], 'number', '4th positional arg must be a numeric TTL');
 });

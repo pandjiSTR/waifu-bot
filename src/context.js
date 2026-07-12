@@ -227,7 +227,7 @@ export async function summarizeContext(redis, userId, isGroup = false) {
     const summaryKey = summaryKeyFor(userId, isGroup);
     const ttl = ttlFor(isGroup);
     if (redis) {
-      await redis.set(summaryKey, newSummary, ttl);
+      await redis.set(summaryKey, newSummary, 'EX', ttl);
       // Keep the newer half (drop the oldest `take`).
       await redis.ltrim(keyFor(userId, isGroup), 0, max - 1 - take);
     } else {

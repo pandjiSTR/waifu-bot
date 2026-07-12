@@ -109,7 +109,7 @@ export async function connectToWhatsApp() {
 
     if (qr) {
       try {
-        await redis?.set('waifu:qr', qr, 300);
+        await redis?.set('waifu:qr', qr, 'EX', 300);
       } catch (e) {
           logger.warn({ err: e }, 'Failed to save QR to Redis');
         }
