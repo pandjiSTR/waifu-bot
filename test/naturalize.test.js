@@ -1,7 +1,7 @@
 // Tests for src/naturalize.js — generic, persona-agnostic normalization.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { naturalizeReply, guardLaughs, hasLaugh } from '../src/naturalize.js';
+import { naturalizeReply, guardLaughs, hasLaugh, stripTrailingLaugh } from '../src/naturalize.js';
 
 test('naturalizeReply trims surrounding whitespace', () => {
   assert.strictEqual(naturalizeReply('   hai   '), 'hai');
@@ -79,4 +79,26 @@ test('guardLaughs strips all laughs when max is 0', () => {
 test('guardLaughs keeps text unchanged when no/within limit', () => {
   assert.strictEqual(guardLaughs('halo apa kabar'), 'halo apa kabar');
   assert.strictEqual(guardLaughs('wkwk lucu', { max: 0 }), 'lucu');
+});
+
+test('stripTrailingLaugh strips trailing laugh when it is the only laugh', () => {
+  assert.strictEqual(stripTrailingLaugh('oke nanti cek dulu wkwkwk'), 'oke nanti cek dulu');
+  assert.strictEqual(stripTrailingLaugh('iya sih wkakwkw'), 'iya sih');
+  assert.strictEqual(stripTrailingLaugh('makasih akwokwkw'), 'makasih');
+  assert.strictEqual(stripTrailingLaugh('oke nanti awikwok'), 'oke nanti');
+});
+
+test('stripTrailingLaugh keeps laugh when it is at the start or middle', () => {
+  assert.strictEqual(stripTrailingLaugh('wkwkwk lucu banget'), 'wkwkwk lucu banget');
+  assert.strictEqual(stripTrailingLaugh('lucu akwokwkw banget'), 'lucu akwokwkw banget');
+});
+
+test('stripTrailingLaugh keeps pure laugh reply untouched', () => {
+  assert.strictEqual(stripTrailingLaugh('wkwkwk'), 'wkwkwk');
+  assert.strictEqual(stripTrailingLaugh('akwokwkw'), 'akwokwkw');
+});
+
+test('stripTrailingLaugh keeps text without laugh unchanged', () => {
+  assert.strictEqual(stripTrailingLaugh('halo apa kabar'), 'halo apa kabar');
+  assert.strictEqual(stripTrailingLaugh(''), '');
 });

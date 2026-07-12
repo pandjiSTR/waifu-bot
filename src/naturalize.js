@@ -55,7 +55,7 @@ function stripWrappingFence(text) {
  * @param {string} text
  * @returns {boolean}
  */
-const LAUGH_PATTERN = 'wkwk+|awikwok|akw[a-z]+|wkakwkw|wk+';
+const LAUGH_PATTERN = 'wkakwkw|(?:wk)+|awikwok|akwo[a-z]+';
 export function hasLaugh(text) {
   // Fresh, non-global regex each call — `test()` on a /g regex mutates
   // lastIndex and would give alternating results across calls.
@@ -100,6 +100,27 @@ export function guardLaughs(text, { max = 1 } = {}) {
   return t;
 }
 
+const TRAILING_LAUGH_RE = new RegExp('(' + LAUGH_PATTERN + ')\\s*$', 'i');
+const ALL_LAUGH_RE = new RegExp(LAUGH_PATTERN, 'gi');
+
+export function stripTrailingLaugh(text) {
+  const t = String(text ?? '').trim();
+  if (!t) return t;
+
+  const match = t.match(TRAILING_LAUGH_RE);
+  if (!match) return t;
+
+  const all = t.match(ALL_LAUGH_RE);
+  if (all && all.length === 1 && t === match[0]) {
+    return t;
+  }
+  if (all && all.length === 1) {
+    return t.slice(0, match.index).trimEnd();
+  }
+
+  return t;
+}
+
 export function naturalizeReply(text) {
   let t = String(text ?? '').trim();
 
@@ -124,4 +145,4 @@ export function naturalizeReply(text) {
   return t;
 }
 
-export default { naturalizeReply };
+export default { naturalizeReply, stripTrailingLaugh };

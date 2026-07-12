@@ -3,7 +3,7 @@ import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
 import { addMessage, getWindow, summarizeContext, replaceLastMessage } from './context.js';
 import { sendChunks } from './chunks.js';
-import { naturalizeReply, guardLaughs, hasLaugh } from './naturalize.js';
+import { naturalizeReply, guardLaughs, hasLaugh, stripTrailingLaugh } from './naturalize.js';
 import { isOpen, remainingMs, onTrip, onClose } from './circuit.js';
 import { detectBadword } from './badwords.js';
 import { describeImage, extractPdfText, getMediaBuffer } from './media.js';
@@ -596,8 +596,9 @@ export async function processLLM(body, ctx) {
   reply = stripMemoryTokens(reply);
 
   // Fase 4: normalize (generic, persona-agnostic) before delivery.
-  reply = naturalizeReply(reply);
   reply = guardLaughs(reply, { max: araRecentLaughed ? 0 : 1 });
+  reply = stripTrailingLaugh(reply);
+  reply = naturalizeReply(reply);
 
   // Split on every \n\n — each paragraph becomes its own WhatsApp bubble.
   // The LLM controls bubble structure via blank lines; short banter stays as
