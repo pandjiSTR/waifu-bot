@@ -52,6 +52,8 @@ test('hasLaugh detects common laugh tokens', () => {
   assert.strictEqual(hasLaugh('akwokwkw masa sih'), true);
   assert.strictEqual(hasLaugh('wk wk'), true);
   assert.strictEqual(hasLaugh('halo apa kabar'), false);
+  assert.strictEqual(hasLaugh('akwok'), true);
+  assert.strictEqual(hasLaugh('akwowk'), true);
 });
 
 test('hasLaugh does not suffer global-regex lastIndex state bug', () => {
@@ -63,6 +65,10 @@ test('hasLaugh does not suffer global-regex lastIndex state bug', () => {
 
 test('guardLaughs keeps at most one laugh by default', () => {
   assert.strictEqual(guardLaughs('wkwk lucu wkwk banget wkwk'), 'wkwk lucu banget');
+});
+
+test('guardLaughs dedup akwo variant laughs', () => {
+  assert.strictEqual(guardLaughs('akwok tes akwowk lagi', { max: 1 }), 'akwok tes lagi');
 });
 
 test('guardLaughs strips all laughs when max is 0', () => {

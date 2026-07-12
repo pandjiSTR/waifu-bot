@@ -9,14 +9,33 @@ import { execFile } from 'node:child_process';
 import os from 'node:os';
 import { writeFileSync, unlinkSync } from 'node:fs';
 import { getMediaBuffer } from './media.js';
+import WebP from 'node-webpmux';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
-// PRD §5.3 pack metadata. NOTE: WhatsApp derives the pack name / publisher from
-// the user's "Add to sticker pack" action in the client — those labels are NOT
-// stored as EXIF fields in the .webp file itself, and Sharp cannot set them
-// directly. We output a plain 512x512 WebP; the pack labels are applied by the
-// WhatsApp client when the user adds the sticker to a pack.
+function makeExif(packname, author) {
+  const data = Buffer.from(JSON.stringify({
+    'sticker-pack-id': packname + Math.random().toString(36).slice(2, 6),
+    'sticker-pack-name': packname,
+    'sticker-pack-publisher': author,
+    emojis: [],
+  }), 'utf-8');
+
+  const exif = Buffer.alloc(22 + data.length);
+  let o = 0;
+  exif.writeUInt16LE(0x4949, o); o += 2;
+  exif.writeUInt16LE(0x002A, o); o += 2;
+  exif.writeUInt32LE(8, o); o += 4;
+  exif.writeUInt16LE(1, o); o += 2;
+  exif.writeUInt16LE(0x5741, o); o += 2;
+  exif.writeUInt16LE(7, o); o += 2;
+  exif.writeUInt32LE(data.length, o); o += 4;
+  exif.writeUInt32LE(22, o); o += 4;
+  data.copy(exif, o);
+
+  return exif;
+}
+
 const STICKER_SIZE = 512;
 const STICKER_PACK = 'ara bikin stiker';
 const STICKER_PUBLISHER = 'uletbulujawa';
@@ -67,7 +86,10 @@ export async function makeSticker(sock, message) {
         });
         const result = await import('node:fs/promises').then((m) => m.readFile(outputPath));
         try { unlinkSync(inputPath); unlinkSync(outputPath); } catch { /* cleanup best-effort */ }
-        return result;
+        const animImg = new WebP.Image();
+        await animImg.load(result);
+        animImg.exif = makeExif(STICKER_PACK, STICKER_PUBLISHER);
+        return await animImg.save(null);
       } catch (ffErr) {
         if (ffErr.code === 'ENOENT') {
           logger.warn('FFmpeg not found — falling back to static Sharp for animated input');
@@ -86,10 +108,10 @@ export async function makeSticker(sock, message) {
       .webp()
       .toBuffer();
 
-    // Pack name / publisher are applied by the WhatsApp client (see note above),
-    // not embeddable via Sharp EXIF. STICKER_PACK / STICKER_PUBLISHER are kept
-    // as the documented intent for that flow.
-    return webp;
+    const img = new WebP.Image();
+    await img.load(webp);
+    img.exif = makeExif(STICKER_PACK, STICKER_PUBLISHER);
+    return await img.save(null);
   } catch (err) {
     logger.warn({ err }, 'makeSticker failed');
     return null; // never throw

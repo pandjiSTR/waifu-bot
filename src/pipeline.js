@@ -219,7 +219,7 @@ export async function shouldProcess(body, ctx) {
     const stanzaId = contextInfo?.stanzaId;
     const isReplyToBot = Boolean(stanzaId) && botSentIds.has(stanzaId);
     const bodyLower = String(body).toLowerCase();
-    if (!mentionedBot && !quotedBot && !isReplyToBot && !/\bara+/i.test(bodyLower)) {
+    if (!mentionedBot && !quotedBot && !isReplyToBot && !/\bara+\b/i.test(bodyLower)) {
       return false;
     }
   }

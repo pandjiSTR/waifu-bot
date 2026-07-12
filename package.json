@@ -28,6 +28,7 @@
     "cheerio": "^1.0.0",
     "ioredis": "^5.4.1",
     "jsonwebtoken": "^9.0.2",
+    "node-webpmux": "^3.2.1",
     "ollama": "^0.5.12",
     "pdfjs-dist": "^6.1.200",
     "pino": "^9.4.0",

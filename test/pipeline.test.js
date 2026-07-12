@@ -121,6 +121,22 @@ test('shouldProcess allows group message containing the command prefix', async (
   assert.strictEqual(await pipeline.shouldProcess('ara ceritakan jokes', ctx), true);
 });
 
+test('shouldProcess rejects "arah/arab/arak/aray" in group (false prefix)', async () => {
+  const ctx = makeCtx({
+    isGroup: true,
+    jid: '120363012345678@g.us',
+    sender: '6281234567890@s.whatsapp.net',
+    message: {
+      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
+      message: { extendedTextMessage: { text: 'arah ke mana' } },
+    },
+  });
+  assert.strictEqual(await pipeline.shouldProcess('arah ke mana', ctx), false);
+  assert.strictEqual(await pipeline.shouldProcess('arab saudi', ctx), false);
+  assert.strictEqual(await pipeline.shouldProcess('arak', ctx), false);
+  assert.strictEqual(await pipeline.shouldProcess('aray', ctx), false);
+});
+
 test('shouldProcess responds to a group reply quoting the bot (no "ara" text)', async () => {
   const ctx = makeCtx({
     isGroup: true,
