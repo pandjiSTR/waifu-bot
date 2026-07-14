@@ -32,12 +32,10 @@
 | 🗂️ | **Context Window** | Sliding window with auto-summarization for long convos |
 | 🛡️ | **Circuit Breaker** | Auto-cooldown on LLM failure — prevents cascading errors |
 | 📊 | **Dashboard** | 9 SPA pages: overview, chat, analytics, logs, debug, settings |
-| 🔐 | **Auth** | JWT + bcrypt — dashboard protected |
 | ⚡ | **Parallel Processing** | Context loading + media processing + friend memory in parallel |
 | 🚦 | **Rate Limiting** | Per-JID message dedup + rate limiting |
 | 🔄 | **Auto-Retry** | Message delivery with exponential backoff (3 retries) |
 | 📅 | **Proactive Chat** | Auto-send periodic messages to owner |
-| 🗑️ | **Badword Detection** | Detects badwords, shifts tone to sarcastic (doesn't block) |
 | 🔎 | **Search Loop** | Up to 2 search iterations, 30s timeout via AbortController |
 | 💾 | **Durable Storage** | Upstash Redis — persistence across restarts |
 | 🌐 | **Group Aware** | Responds to mentions, replies, and "ara" prefix in groups |
@@ -52,12 +50,6 @@
   <img src="https://img.shields.io/badge/Redis-Upstash-DC382D?logo=redis" alt="Redis">
   <img src="https://img.shields.io/badge/Ollama-Cloud-000?logo=ollama" alt="Ollama">
   <img src="https://img.shields.io/badge/Baileys-WhatsApp-25D366?logo=whatsapp" alt="Baileys">
-  <img src="https://img.shields.io/badge/JWT-auth-000?logo=jsonwebtokens" alt="JWT">
-  <img src="https://img.shields.io/badge/bcrypt-auth-3178C6" alt="bcrypt">
-  <img src="https://img.shields.io/badge/Pino-logging-000" alt="Pino">
-  <img src="https://img.shields.io/badge/Sharp-images-99CC00?logo=sharp" alt="Sharp">
-  <img src="https://img.shields.io/badge/pdfjs-PDF-EC1C24" alt="pdfjs">
-  <img src="https://img.shields.io/badge/Chart.js-4.0-FF6384?logo=chartdotjs" alt="Chart.js">
 </p>
 
 ---
