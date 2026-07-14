@@ -5,8 +5,6 @@
 <h1 align="center">Waifu Bot</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/github/last-commit/pandjiSTR/waifu-bot?logo=github&label=updated" alt="Last Commit">
-  <img src="https://img.shields.io/github/repo-size/pandjiSTR/waifu-bot" alt="Repo Size">
   <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node">
   <img src="https://img.shields.io/badge/tests-256%20passing-green" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
