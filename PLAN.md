@@ -40,8 +40,21 @@ Make this repo clone-able and reusable by anyone — remove all hardcoded person
 
 ---
 
+## Fork — Private Ara Version
+
+1. Fork `pandjiSTR/waifu-bot` via GitHub UI → visibility **Private**
+2. Fork brings all branches including `dev` (with `personality.txt`)
+3. Delete `dev` from public repo: `git push origin --delete dev`
+
+**Result:**
+| Repo | Visibility | Use |
+|---|---|---|
+| `pandjiSTR/waifu-bot` | Public | Open source, anyone can clone |
+| `pandjiSTR/ara-waifu-bot` | Private | Personal Ara version |
+
+---
+
 ## Notes
 
-- `dev` branch holds the personal Ara version. All changes above go to `main`.
 - `BOT_NAME` env var default: `bot`. Users set it to their own bot's name.
 - No breaking changes to Redis keys or data model.
