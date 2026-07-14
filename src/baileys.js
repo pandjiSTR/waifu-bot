@@ -160,6 +160,9 @@ export async function connectToWhatsApp() {
     markOnlineOnConnect: false,
     browser: ['Ara (Chrome)', '', ''],
     query: { useCachedResponse: true },
+    connectTimeoutMs: 120_000,
+    defaultQueryTimeoutMs: 60_000,
+    retryRequestDelayMs: 5000,
   });
 
   sock = newSock;
