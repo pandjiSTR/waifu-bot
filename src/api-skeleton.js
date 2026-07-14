@@ -1,5 +1,7 @@
 import { getPersonalityContent, savePersonality } from './personality.js';
-import { setBlacklist, setCircuitBreakerEnabled } from './pipeline.js';
+import { setBlacklist } from './gatekeeper.js';
+import { setCircuitBreakerEnabled } from './pipeline.js';
+import { scanAll } from './redis.js';
 import { getConnectionState } from './baileys.js';
 import { isAutoChatEnabled, setAutoChat } from './autochat.js';
 import { state as cbState, __reset } from './circuit.js';
@@ -152,11 +154,9 @@ export async function handleGetFriends(req, res) {
     }
 
     let friends = [];
-    if (req.redis) {
-      const data = await req.redis.hgetall('waifu:stats:friends') || {};
-      const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
-      friends = await Promise.all(sorted.map(async ([number, msgCount]) => ({ number, msgCount: parseInt(msgCount), name: await resolveName(req.redis, number, false) })));
-    }
+    const data = await req.redis.hgetall('waifu:stats:friends') || {};
+    const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+    friends = await Promise.all(sorted.map(async ([number, msgCount]) => ({ number, msgCount: parseInt(msgCount), name: await resolveName(req.redis, number, false) })));
     json(res, 200, { friends });
   } catch (err) {
     logger.error({ err }, 'Get friends handler error');
@@ -309,10 +309,8 @@ export async function handleGetLogs(req, res) {
     }
 
     let logs = [];
-    if (req.redis) {
-      const raw = await req.redis.lrange('waifu:logs', 0, 99);
-      logs = raw.map(s => { try { return JSON.parse(s); } catch { return { msg: s }; } });
-    }
+    const raw = await req.redis.lrange('waifu:logs', 0, 99);
+    logs = raw.map(s => { try { return JSON.parse(s); } catch { return { msg: s }; } });
     json(res, 200, { logs });
   } catch (err) {
     logger.error({ err }, 'Get logs handler error');
@@ -333,9 +331,7 @@ export async function handleClearLogs(req, res) {
     }
 
     let cleared = 0;
-    if (req.redis) {
-      cleared = await req.redis.del('waifu:logs');
-    }
+    cleared = await req.redis.del('waifu:logs');
     json(res, 200, { message: 'Logs cleared', cleared: Math.max(0, cleared) });
   } catch (err) {
     logger.error({ err }, 'Clear logs handler error');
@@ -360,22 +356,20 @@ export async function handleGetContacts(req, res) {
     }
 
     let contacts = [];
-    if (req.redis) {
-      const keys = await req.redis.keys('waifu:ctx:*');
-      const groupKeys = await req.redis.keys('waifu:grup:*');
-      const friendCounts = await req.redis.hgetall('waifu:stats:friends') || {};
-      for (const key of keys) {
-        const number = key.replace('waifu:ctx:', '');
-        const msgCount = parseInt(friendCounts[number] || '0');
-        contacts.push({ number, name: await resolveName(req.redis, number, false), msgCount, isGroup: false, mood: { score: 0, label: '-' } });
-      }
-      for (const key of groupKeys) {
-        const gid = key.replace('waifu:grup:', '');
-        const msgCount = await req.redis.llen(key).catch(() => 0) || 0;
-        contacts.push({ number: gid, name: await resolveName(req.redis, gid, true), msgCount, isGroup: true, mood: { score: 0, label: '-' } });
-      }
-      contacts.sort((a, b) => b.msgCount - a.msgCount);
+    const keys = await scanAll(req.redis, 'waifu:ctx:*');
+    const groupKeys = await scanAll(req.redis, 'waifu:grup:*');
+    const friendCounts = await req.redis.hgetall('waifu:stats:friends') || {};
+    for (const key of keys) {
+      const number = key.replace('waifu:ctx:', '');
+      const msgCount = parseInt(friendCounts[number] || '0');
+      contacts.push({ number, name: await resolveName(req.redis, number, false), msgCount, isGroup: false, mood: { score: 0, label: '-' } });
     }
+    for (const key of groupKeys) {
+      const gid = key.replace('waifu:grup:', '');
+      const msgCount = await req.redis.llen(key).catch(() => 0) || 0;
+      contacts.push({ number: gid, name: await resolveName(req.redis, gid, true), msgCount, isGroup: true, mood: { score: 0, label: '-' } });
+    }
+    contacts.sort((a, b) => b.msgCount - a.msgCount);
     json(res, 200, { contacts });
   } catch (err) {
     logger.error({ err }, 'Get contacts handler error');
@@ -399,7 +393,7 @@ export async function handleGetContext(req, res) {
     }
 
     let context = [];
-    if (req.redis && number) {
+    if (number) {
       const isGroup = number.includes('@g.us');
       const storeKey = isGroup ? `waifu:grup:${number}` : `waifu:ctx:${number}`;
       const raw = await req.redis.lrange(storeKey, 0, 49);
@@ -498,15 +492,13 @@ export async function handleGetTrend(req, res) {
     }
 
     // Fill from hourly Redis sorted sets
-    if (req.redis) {
-      const keys = await req.redis.keys('waifu:stats:hourly:*') || [];
-      for (const key of keys) {
-        const count = await req.redis.zscore(key, 'msg');
-        if (count) {
-          const datePart = key.slice('waifu:stats:hourly:'.length).slice(0, 10);
-          const entry = trend.find(e => e.date === datePart);
-          if (entry) entry.sent += parseInt(count);
-        }
+    const keys = await scanAll(req.redis, 'waifu:stats:hourly:*');
+    for (const key of keys) {
+      const count = await req.redis.zscore(key, 'msg');
+      if (count) {
+        const datePart = key.slice('waifu:stats:hourly:'.length).slice(0, 10);
+        const entry = trend.find(e => e.date === datePart);
+        if (entry) entry.sent += parseInt(count);
       }
     }
 
@@ -530,16 +522,14 @@ export async function handleGetTopFriends(req, res) {
     }
 
     let topFriends = [];
-    if (req.redis) {
-      const data = await req.redis.hgetall('waifu:stats:friends') || {};
-      const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 20);
-      const total = sorted.reduce((s, [, c]) => s + parseInt(c), 0) || 1;
-      topFriends = await Promise.all(sorted.map(async ([name, count]) => ({
-        name: await resolveName(req.redis, name, false),
-        msgCount: parseInt(count),
-        percentage: Math.round(parseInt(count) / total * 100)
-      })));
-    }
+    const data = await req.redis.hgetall('waifu:stats:friends') || {};
+    const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 20);
+    const total = sorted.reduce((s, [, c]) => s + parseInt(c), 0) || 1;
+    topFriends = await Promise.all(sorted.map(async ([name, count]) => ({
+      name: await resolveName(req.redis, name, false),
+      msgCount: parseInt(count),
+      percentage: Math.round(parseInt(count) / total * 100)
+    })));
     json(res, 200, { topFriends });
   } catch (err) {
     logger.error({ err }, 'Get top friends handler error');
@@ -560,13 +550,11 @@ export async function handleGetHourly(req, res) {
     }
 
     const hours = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 }));
-    if (req.redis) {
-      const keys = await req.redis.keys('waifu:stats:hourly:*') || [];
-      for (const key of keys) {
-        const hourPart = parseInt(key.replace('waifu:stats:hourly:', '').slice(11, 13)) || 0;
-        const count = await req.redis.zscore(key, 'msg');
-        if (count && hours[hourPart]) hours[hourPart].count += parseInt(count);
-      }
+    const keys = await scanAll(req.redis, 'waifu:stats:hourly:*');
+    for (const key of keys) {
+      const hourPart = parseInt(key.replace('waifu:stats:hourly:', '').slice(11, 13)) || 0;
+      const count = await req.redis.zscore(key, 'msg');
+      if (count && hours[hourPart]) hours[hourPart].count += parseInt(count);
     }
     json(res, 200, { hours });
   } catch (err) {
@@ -592,14 +580,12 @@ export async function handleGetTodayOverview(req, res) {
     }
 
     let stats = { messages: 0, tokens: 0, activeUsers: 0, llmCalls: 0, autoChat: 0 };
-    if (req.redis) {
-      const m = await req.redis.hgetall('waifu:stats:messages') || {};
-      stats.messages = parseInt(m.total || '0');
-      const friends = await req.redis.hgetall('waifu:stats:friends') || {};
-      stats.activeUsers = Object.keys(friends).length;
-      const llmTimes = await req.redis.lrange('waifu:stats:llm_times', 0, -1).catch(() => []);
-      stats.llmCalls = llmTimes.length;
-    }
+    const m = await req.redis.hgetall('waifu:stats:messages') || {};
+    stats.messages = parseInt(m.total || '0');
+    const friends = await req.redis.hgetall('waifu:stats:friends') || {};
+    stats.activeUsers = Object.keys(friends).length;
+    const llmTimes = await req.redis.lrange('waifu:stats:llm_times', 0, -1).catch(() => []);
+    stats.llmCalls = llmTimes.length;
     json(res, 200, {
       today: stats,
       deltas: {},
@@ -633,15 +619,13 @@ export async function handleGetMessages(req, res) {
       const dateStr = d.toISOString().slice(0, 10);
       days.push({ date: dateStr, sent: 0, received: 0 });
     }
-    if (req.redis) {
-      const keys = await req.redis.keys('waifu:stats:hourly:*') || [];
-      for (const key of keys) {
-        const datePart = key.replace('waifu:stats:hourly:', '').slice(0, 10);
-        const day = days.find(d => d.date === datePart);
-        if (day) {
-          const count = await req.redis.zscore(key, 'msg');
-          if (count) day.sent += parseInt(count);
-        }
+    const keys = await scanAll(req.redis, 'waifu:stats:hourly:*');
+    for (const key of keys) {
+      const datePart = key.replace('waifu:stats:hourly:', '').slice(0, 10);
+      const day = days.find(d => d.date === datePart);
+      if (day) {
+        const count = await req.redis.zscore(key, 'msg');
+        if (count) day.sent += parseInt(count);
       }
     }
     json(res, 200, { days });

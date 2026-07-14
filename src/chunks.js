@@ -1,4 +1,5 @@
 import pino from 'pino';
+import { sleep } from './util.js';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
@@ -12,10 +13,6 @@ const _rawRetry = process.env.CHUNK_SEND_RETRY;
 export const DEFAULT_MAX_ATTEMPTS = /^\d+$/.test(_rawRetry) ? parseInt(_rawRetry, 10) : 3;
 export const DEFAULT_DELAY_MS = 250;
 export const DEFAULT_BACKOFF_BASE_MS = 500; // 500ms -> 1s -> 2s
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Split a reply into chunks of at most `maxChars` characters.

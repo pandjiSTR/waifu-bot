@@ -1,4 +1,5 @@
 import pino from 'pino';
+import { normalizeNumber, getOwnerNumbers } from './util.js';
 import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
 import { addMessage, getWindow, summarizeContext, replaceLastMessage } from './context.js';
@@ -10,6 +11,7 @@ import { describeImage, extractPdfText, getMediaBuffer } from './media.js';
 import { makeSticker } from './sticker.js';
 import { webSearch, webFetch, extractSearchQuery, stripSearchTokens } from './search.js';
 import { getFriendMemory, addFact, setMood } from './memory.js';
+import { extractText, shouldProcess, trackBotMessage, loadBlacklist, setBlacklist, stopSweeper, isStickerRequest } from './gatekeeper.js';
 
 // PRD §5.7: a detected badword must NOT block the message — it shifts the reply
 // tone to sarcastic. This is a TASK instruction (behavior), not persona voice
@@ -42,220 +44,6 @@ if (!registered) {
   onClose((d) => logger.info({ ...d }, 'Circuit breaker closed'));
 }
 
-const OWNER_NUMBERS = (process.env.OWNER_NUMBER || '')
-  .split(',')
-  .map(normalizeNumber)
-  .filter(Boolean);
-let blacklist = [];
-const WHITELIST = (process.env.WHITELIST || '')
-  .split(',')
-  .map(normalizeNumber)
-  .filter(Boolean);
-
-// In-memory dedup: messageId -> expiry timestamp (1 min TTL, per PRD §6.2).
-// TODO: persist dedup in Redis for multi-instance (§14 rate-limiting area).
-const seen = new Map();
-const SEEN_TTL_MS = 60 * 1000;
-let sweepTimer = process.env.NODE_ENV !== 'test' ? setInterval(pruneSeen, 5 * 60 * 1000) : null;
-
-// Tracks the message ids the bot itself has sent, so a later reply quoting one
-// of them (contextInfo.stanzaId) can be recognized as "reply to Ara" without
-// fragile JID/participant comparison. Mirrors the proven main-branch approach.
-const botSentIds = new Set();
-const MAX_BOT_SENT = 10000;
-
-export function trackBotMessage(id) {
-  if (!id) return;
-  if (botSentIds.size >= MAX_BOT_SENT) botSentIds.clear();
-  botSentIds.add(id);
-}
-
-function normalizeNumber(n) {
-  if (!n) return '';
-  return String(n)
-    .replace(/@s\.whatsapp\.net$/, '')
-    .replace(/:\d+$/, '') // strip device suffix, e.g. :0 in 628...:0@s.whatsapp.net
-    .replace(/[^0-9]/g, '');
-}
-
-function pruneSeen() {
-  const now = Date.now();
-  for (const [k, exp] of seen) {
-    if (exp < now) seen.delete(k);
-  }
-}
-
-export function stopSweeper() {
-  if (sweepTimer) {
-    clearInterval(sweepTimer);
-    sweepTimer = null;
-  }
-}
-
-export async function loadBlacklist(redis) {
-  if (redis) {
-    try {
-      const raw = await redis.get('waifu:settings:misc');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const list = parsed.blacklist || '';
-        blacklist = String(list).split(',').map(normalizeNumber).filter(Boolean);
-        return;
-      }
-    } catch (err) {
-      logger.warn({ err }, 'loadBlacklist failed');
-    }
-  }
-  blacklist = (process.env.BLACKLIST || '').split(',').map(normalizeNumber).filter(Boolean);
-}
-
-export function setBlacklist(list) {
-  blacklist = Array.isArray(list) ? list.map(normalizeNumber).filter(Boolean) : [];
-}
-
-/**
- * Extract plain text from a WAMessage.
- * Handles conversation / extendedText / image-video-audio caption.
- * @param {object} m  // WAMessage
- * @returns {string|null}
- */
-export function extractText(m) {
-  const msg = m?.message;
-  if (!msg) return null;
-
-  const text =
-    msg.conversation ||
-    msg.extendedTextMessage?.text ||
-    msg.imageMessage?.caption ||
-    msg.videoMessage?.caption ||
-    msg.audioMessage?.caption ||
-    null;
-
-  if (text == null) return null;
-
-  const cleaned = String(text).replace(/\0/g, '').trim().slice(0, 2000);
-  return cleaned || null;
-}
-
-/**
- * Detect a sticker-maker request: an image message that is either captioned
- * with "stiker"/"sticker" or is a reply to a bot message. (PRD §5.3)
- * @param {{message?:object, sock?:object}} ctx
- * @returns {boolean}
- */
-function isStickerRequest(ctx) {
-  const msg = ctx?.message?.message;
-  if (!msg?.imageMessage) return false;
-
-  const caption = msg.imageMessage.caption || '';
-  if (/stiker|sticker/i.test(caption)) return true;
-
-  // Reply to a bot message (image sent as a reply). The quoted participant
-  // equals the bot's own JID when replying to Ara. Use the connection-captured
-  // JID (ctx.botJid) so it is reliable even if sock.user.id is unset.
-  const ctxInfo = msg.imageMessage.contextInfo;
-  if (ctxInfo?.quotedMessage) {
-    const botNumber = normalizeNumber(ctx?.botJid || ctx?.sock?.user?.id);
-    if (botNumber && normalizeNumber(ctxInfo.participant) === botNumber) return true;
-  }
-  return false;
-}
-
-/**
- * Decide whether Ara should produce a reply.
- * @param {string} body
- * @param {{jid:string, isGroup:boolean, sender:string, message:object, sock:object, redis:object|null, messageId:string}} ctx
- * @returns {Promise<boolean>}
- */
-export async function shouldProcess(body, ctx) {
-  // 1. Echo / self
-  if (ctx.message?.key?.fromMe) return false;
-
-  // 2. Dedup (memory + Redis NX: survives restart / multi-instance)
-  pruneSeen();
-  const mid = ctx.messageId;
-  if (mid && seen.has(mid)) return false;
-  if (mid && ctx.redis) {
-    try {
-      const r = await ctx.redis.set(`waifu:seen:${mid}`, '1', 'EX', 300, 'NX');
-      if (r === null) return false; // already processed -> skip
-    } catch { /* fall back to memory-only */ }
-  }
-  if (mid) seen.set(mid, Date.now() + SEEN_TTL_MS);
-
-  // 3. Blacklist
-  const senderNorm = normalizeNumber(ctx.sender);
-  if (blacklist.includes(senderNorm)) {
-    ctx.redis?.lpush('waifu:logs', JSON.stringify({ time: new Date().toISOString(), level: 'info', msg: `Blocked blacklisted: ${ctx.sender}` })).catch(() => {});
-    return false;
-  }
-
-  // 4. Whitelist (if set, only owner + listed numbers may interact)
-  if (
-    WHITELIST.length &&
-    !OWNER_NUMBERS.includes(senderNorm) &&
-    !WHITELIST.includes(senderNorm)
-  ) {
-    return false;
-  }
-
-  // 5. Group rules: respond only on mention / reply-to-bot / command prefix.
-  if (ctx.isGroup) {
-    // Prefer the JID captured at connection time (ctx.botJid); fall back to the
-    // socket's user id. Compare on normalized digits so LID / device-suffix
-    // / @mention-prefix formats all match reliably.
-    const botNumber = normalizeNumber(ctx.botJid || ctx.sock?.user?.id);
-    const contextInfo = ctx.message?.message?.extendedTextMessage?.contextInfo;
-    const mentioned = contextInfo?.mentionedJid || [];
-    const mentionedBot =
-      Array.isArray(mentioned) && mentioned.some((j) => normalizeNumber(j) === botNumber);
-    const quotedParticipant = contextInfo?.participant;
-    const quotedBot = quotedParticipant
-      ? normalizeNumber(quotedParticipant) === botNumber
-      : false;
-    // Robust reply-to-bot detection (mirrors main branch): if the quoted
-    // message id is one the bot actually sent, this is a reply to Ara —
-    // independent of participant/JID format quirks.
-    const stanzaId = contextInfo?.stanzaId;
-    const isReplyToBot = Boolean(stanzaId) && botSentIds.has(stanzaId);
-    const bodyLower = String(body).toLowerCase();
-    if (!mentionedBot && !quotedBot && !isReplyToBot && !/\bara+\b/i.test(bodyLower)) {
-      return false;
-    }
-  }
-
-  // 6. Owner commands / unsupported media.
-  // Owner-only commands ('ara fresh', 'ara status') are handled elsewhere (Fase 6+);
-  // do not send them to the LLM.
-  const ownerCmd = String(body).toLowerCase();
-  if (
-    OWNER_NUMBERS.includes(senderNorm) &&
-    (ownerCmd.startsWith('ara fresh') || ownerCmd.startsWith('ara status'))
-  ) {
-    return false;
-  }
-  // Incoming user-sent stickers are still ignored (no media handling for them).
-  if (ctx.message?.message?.stickerMessage) return false;
-
-  // 7. Badword (Fase 6 / PRD §5.7): detected -> mark ctx.badword but DO NOT
-  // block. The pipeline shifts the reply tone to sarcastic instead. Debounce
-  // (rate-limit per sender) remains deferred to §14 backlog.
-  if (detectBadword(body)) {
-    ctx.badword = true;
-  }
-
-  // Fire-and-forget Redis instrumentation (never blocks the pipeline).
-if (ctx.redis) {
-    ctx.redis.hincrby('waifu:stats:messages', 'total', 1).catch(() => {});
-    ctx.redis.hincrby('waifu:stats:friends', ctx.sender, 1).catch(() => {});
-    const hourKey = 'waifu:stats:hourly:' + new Date().toISOString().slice(0, 13) + ':00';
-    ctx.redis.zincrby(hourKey, 1, 'msg').catch(() => {});
-    ctx.redis.expire(hourKey, 48 * 3600).catch(() => {});
-  }
-
-  return true;
-}
-
 /**
  * Send a single neutral owner alert when the circuit breaker trips, deduped
  * via the `waifu:last_alert` Redis key (15-min window, PRD §6.3 / §6.5).
@@ -267,7 +55,7 @@ if (ctx.redis) {
  * @param {{jid:string, isGroup:boolean, sender:string, message:object, sock:object, redis:object|null}} ctx
  */
 export async function maybeAlertOwner(ctx) {
-  const ownerDigits = OWNER_NUMBERS[0];
+  const ownerDigits = getOwnerNumbers()[0];
   if (!ownerDigits) return; // no owner configured -> no-op
 
   const ownerJid = ownerDigits + '@s.whatsapp.net';
@@ -357,16 +145,39 @@ export async function processLLM(body, ctx) {
   // Persist the user's message FIRST so the next turn includes it.
   // (Groups are already persisted in baileys.js before shouldProcess, so we
   // skip the duplicate write here for groups.)
-  if (!isGroup) {
-    await addMessage(
-      ctx.redis,
-      userId,
-      { sender: ctx.sender, text: body, timestamp: new Date().toISOString() },
-      isGroup
-    );
-  }
+  const persistPromise = isGroup
+    ? Promise.resolve()
+    : addMessage(ctx.redis, userId, { sender: ctx.sender, text: body, timestamp: new Date().toISOString() }, isGroup);
 
-  const window = await getWindow(ctx.redis, userId, isGroup);
+  // Fase 6 (§5.6): start media extraction for image/PDF in parallel with
+  // context loading — both are independent and the user doesn't need to wait
+  // for both sequentially. Falls back to ctx.mediaContext for test injection.
+  const mediaPromise = (async () => {
+    if (ctx.mediaContext) return ctx.mediaContext;
+    const msgNode = ctx.message?.message;
+    if (!msgNode) return null;
+    try {
+      if (msgNode.imageMessage) {
+        const desc = await describeImage(ctx.sock, ctx.message, body);
+        return desc ? `[GAMBAR] ${desc}` : null;
+      }
+      if (msgNode.documentMessage && msgNode.documentMessage.mimetype === 'application/pdf') {
+        const buf = await getMediaBuffer(ctx.sock, ctx.message);
+        const text = buf ? await extractPdfText(buf) : '';
+        return text ? `[PDF] ${text}` : null;
+      }
+    } catch (err) {
+      logger.warn({ err }, 'media context extraction failed (ignored)');
+    }
+    return null;
+  })();
+
+  // Run message persist, context loading, and friend memory in parallel
+  const [window, mem] = await Promise.all([
+    persistPromise.then(() => getWindow(ctx.redis, userId, isGroup)),
+    getFriendMemory(ctx.redis, ctx.sender),
+  ]);
+  const mediaContext = await mediaPromise;
 
   // Resolve display names for context clarity (group-awareness). Falls back
   // to raw JIDs when redis is unavailable or names aren't populated.
@@ -392,10 +203,7 @@ export async function processLLM(body, ctx) {
     )
     .join('\n');
 
-  // Load friend memory so the model knows existing facts and mood (if any).
-  const mem = await getFriendMemory(ctx.redis, ctx.sender);
   const factsStr = mem.facts.length ? '• ' + mem.facts.join('\n• ') : '';
-  // personality.js uses positional args: (redis, context, facts, mood).
   let systemPrompt = await buildSystemPrompt(ctx.redis, recentContext, factsStr, mem.mood || '');
 
   // PRD §5.7: a detected badword shifts the reply tone to sarcastic. This is a
@@ -404,7 +212,6 @@ export async function processLLM(body, ctx) {
     systemPrompt += '\n\n' + BADWORD_TONE_INSTRUCTION;
   }
   systemPrompt += MULTI_MESSAGE_INSTRUCTION;
-
 
   // Build the LLM message list from the window returned by getWindow, which
   // ALREADY includes the current user message (persisted above via addMessage).
@@ -422,30 +229,6 @@ export async function processLLM(body, ctx) {
   // Test seam: allow callers to inject a mock LLM via ctx.llm.chat;
   // falls back to the real Ollama client otherwise.
   const chatFn = ctx.llm?.chat || chat;
-
-  // Fase 6 (§5.6): attach media context for image / PDF messages. Prefer an
-  // injected ctx.mediaContext (so processLLM is testable without a real socket);
-  // otherwise detect from the message and call media.js. On any failure we log
-  // and skip — media is supplementary, never a blocker.
-  let mediaContext = ctx.mediaContext;
-  if (!mediaContext && ctx.message?.message) {
-    const msgNode = ctx.message.message;
-    try {
-      if (msgNode.imageMessage) {
-        const desc = await describeImage(ctx.sock, ctx.message, body);
-        if (desc) mediaContext = `[GAMBAR] ${desc}`;
-      } else if (
-        msgNode.documentMessage &&
-        msgNode.documentMessage.mimetype === 'application/pdf'
-      ) {
-        const buf = await getMediaBuffer(ctx.sock, ctx.message);
-        const text = buf ? await extractPdfText(buf) : '';
-        if (text) mediaContext = `[PDF] ${text}`;
-      }
-    } catch (err) {
-      logger.warn({ err }, 'media context extraction failed (ignored)');
-    }
-  }
 
   // Prepend media context to the current (last) user turn so the model sees it
   // alongside the user's text. If no user turn exists, append a synthetic one.
@@ -516,7 +299,11 @@ export async function processLLM(body, ctx) {
   const MAX_SEARCH_ITERATIONS = 2;
   let searchIterations = 0;
   const searchFn = ctx.search || webSearch;
+  const searchTimeoutMs = parseInt(process.env.SEARCH_LOOP_TIMEOUT_MS || '30000', 10);
+  const searchAc = new AbortController();
+  const searchTimer = setTimeout(() => searchAc.abort(), searchTimeoutMs);
 
+  try {
   while (searchIterations < MAX_SEARCH_ITERATIONS) {
     const q = extractSearchQuery(reply);
     if (!q) break;
@@ -524,9 +311,6 @@ export async function processLLM(body, ctx) {
     let results = await searchFn(q, { redis: ctx.redis });
     if (!results) break;
 
-    // Web fetch: try to get full content from the top result URL for deeper
-    // context. Fire-and-forget — failure is ignored. Accepts ctx.fetch for
-    // test injection; falls back to the real webFetch from search.js.
     try {
       const urlMatch = results.match(/\(https?:\/\/[^\s)]+\)/);
       if (urlMatch) {
@@ -541,7 +325,6 @@ export async function processLLM(body, ctx) {
       logger.warn({ err: e }, 'webFetch augment failed (ignored)');
     }
 
-    // Append the search results as a new user message so the model can use them.
     messages.push({
       role: 'user',
       content: `[HASIL PENCARIAN]\n${results}\n\nGunakan hasil di atas untuk menjawab.`,
@@ -550,13 +333,21 @@ export async function processLLM(body, ctx) {
     try {
       reply = await chatFn(messages, {
         options: { num_ctx: isGroup ? 8192 : 4096 },
+        signal: searchAc.signal,
       });
     } catch (err) {
+      if (searchAc.signal.aborted) {
+        logger.warn('search loop timed out — stopping further search iterations');
+        break;
+      }
       logger.error({ err }, 'LLM search follow-up failed');
       break;
     }
 
     searchIterations++;
+  }
+  } finally {
+    clearTimeout(searchTimer);
   }
 
   // Strip any remaining [SEARCH: ...] tokens so the user never sees them.

@@ -1,5 +1,6 @@
 import { Ollama } from 'ollama';
 import pino from 'pino';
+import { sleep } from './util.js';
 import { isOpen, recordSuccess, recordFailure, remainingMs } from './circuit.js';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
@@ -36,10 +37,6 @@ function getClient() {
     });
   }
   return client;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

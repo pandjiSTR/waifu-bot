@@ -2,16 +2,72 @@ import makeWASocket, {
   DisconnectReason,
   isJidGroup,
   fetchLatestBaileysVersion,
+  initAuthCreds,
+  BufferJSON,
+  proto,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
-import { shouldProcess, processLLM, extractText } from './pipeline.js';
+import { shouldProcess, extractText } from './gatekeeper.js';
+import { processLLM } from './pipeline.js';
 import { addMessage } from './context.js';
-import { useRedisAuthState } from './baileys-auth.js';
 import { createDispatcher } from './dispatch.js';
 
 const logger = pino({ name: 'baileys', level: process.env.LOG_LEVEL || 'warn' });
+
+const AUTH_PREFIX = 'waifu:auth:';
+
+async function useRedisAuthState(redis) {
+  const readData = async (id) => {
+    const raw = await redis.get(`${AUTH_PREFIX}${id}`);
+    if (!raw) return null;
+    return JSON.parse(raw, BufferJSON.reviver);
+  };
+
+  const writeData = async (data, id) => {
+    await redis.set(`${AUTH_PREFIX}${id}`, JSON.stringify(data, BufferJSON.replacer));
+  };
+
+  const removeData = async (id) => {
+    await redis.del(`${AUTH_PREFIX}${id}`);
+  };
+
+  const creds = (await readData('creds')) || initAuthCreds();
+
+  return {
+    state: {
+      creds,
+      keys: {
+        get: async (type, ids) => {
+          const data = {};
+          await Promise.all(ids.map(async (id) => {
+            let value = await readData(`${type}-${id}`);
+            if (type === 'app-state-sync-key' && value) {
+              value = proto.Message.AppStateSyncKeyData.fromObject(value);
+            }
+            data[id] = value;
+          }));
+          return data;
+        },
+        set: async (data) => {
+          const tasks = [];
+          for (const category in data) {
+            for (const id in data[category]) {
+              const value = data[category][id];
+              const key = `${category}-${id}`;
+              tasks.push(value ? writeData(value, key) : removeData(key));
+            }
+          }
+          await Promise.all(tasks);
+        },
+      },
+    },
+    saveCreds: async () => {
+      await writeData(creds, 'creds');
+    },
+  };
+}
 
 let connectionState = 'disconnected';
 let sock = null;

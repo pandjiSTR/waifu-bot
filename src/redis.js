@@ -137,31 +137,6 @@ export async function ltrim(key, start, stop) {
 }
 
 /**
- * Add a member to a set.
- */
-export async function sadd(key, member) {
-  if (!client) return;
-  try {
-    await client.sadd(key, member);
-  } catch (err) {
-    logger.error({ err, key }, 'Redis SADD failed');
-  }
-}
-
-/**
- * Get all members of a set.
- */
-export async function smembers(key) {
-  if (!client) return [];
-  try {
-    return await client.smembers(key);
-  } catch (err) {
-    logger.error({ err, key }, 'Redis SMEMBERS failed');
-    return [];
-  }
-}
-
-/**
  * Delete one or more keys.
  */
 export async function del(...keys) {
@@ -170,20 +145,6 @@ export async function del(...keys) {
     await client.del(...keys);
   } catch (err) {
     logger.error({ err, keys }, 'Redis DEL failed');
-  }
-}
-
-/**
- * Check if a key exists.
- */
-export async function exists(key) {
-  if (!client) return false;
-  try {
-    const result = await client.exists(key);
-    return result === 1;
-  } catch (err) {
-    logger.error({ err, key }, 'Redis EXISTS failed');
-    return false;
   }
 }
 
@@ -219,6 +180,30 @@ export async function expire(key, seconds) {
 }
 
 /**
+ * Scan all keys matching a pattern (non-blocking alternative to KEYS).
+ * Uses SCAN internally so it works safely in production without blocking Redis.
+ * Returns an empty array when client is null.
+ * @param {string} pattern - glob pattern (e.g. 'waifu:ctx:*')
+ * @returns {Promise<string[]>}
+ */
+export async function scanAll(pattern) {
+  if (!client) return [];
+  const results = [];
+  let cursor = '0';
+  try {
+    do {
+      const [nextCursor, keys] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = nextCursor;
+      results.push(...keys);
+    } while (cursor !== '0');
+  } catch (err) {
+    logger.error({ err, pattern }, 'Redis SCAN failed');
+    return [];
+  }
+  return results;
+}
+
+/**
  * Close the Redis connection gracefully.
  */
 export async function closeRedis() {
@@ -241,11 +226,9 @@ export default {
   lpush,
   lrange,
   ltrim,
-  sadd,
-  smembers,
   del,
-  exists,
   llen,
   expire,
+  scanAll,
   closeRedis,
 };

@@ -6,7 +6,8 @@ import assert from 'node:assert';
 
 // Default module: no BLACKLIST / WHITELIST env set.
 const pipeline = await import('../src/pipeline.js');
-const { stopSweeper } = pipeline;
+const gk = await import('../src/gatekeeper.js');
+const { stopSweeper } = gk;
 const media = await import('../src/media.js');
 
 function makeCtx(overrides = {}) {
@@ -26,34 +27,34 @@ function makeCtx(overrides = {}) {
 
 test('extractText reads conversation text', () => {
   const m = { message: { conversation: 'halo ara' } };
-  assert.strictEqual(pipeline.extractText(m), 'halo ara');
+  assert.strictEqual(gk.extractText(m), 'halo ara');
 });
 
 test('extractText reads extendedTextMessage text', () => {
   const m = { message: { extendedTextMessage: { text: 'tes' } } };
-  assert.strictEqual(pipeline.extractText(m), 'tes');
+  assert.strictEqual(gk.extractText(m), 'tes');
 });
 
 test('extractText reads image caption', () => {
   const m = { message: { imageMessage: { caption: 'ini foto' } } };
-  assert.strictEqual(pipeline.extractText(m), 'ini foto');
+  assert.strictEqual(gk.extractText(m), 'ini foto');
 });
 
 test('extractText strips null bytes and trims', () => {
   const m = { message: { conversation: '  hai \u0000  ' } };
-  assert.strictEqual(pipeline.extractText(m), 'hai');
+  assert.strictEqual(gk.extractText(m), 'hai');
 });
 
 test('extractText returns null for non-text messages', () => {
   const m = { message: { imageMessage: {} } };
-  assert.strictEqual(pipeline.extractText(m), null);
+  assert.strictEqual(gk.extractText(m), null);
 });
 
 // T2: 2000-char input cap
 test('extractText truncates input to 2000 characters', () => {
   const long = 'x'.repeat(3000);
   const m = { message: { conversation: long } };
-  const result = pipeline.extractText(m);
+  const result = gk.extractText(m);
   assert.strictEqual(result.length, 2000);
   assert.strictEqual(result, 'x'.repeat(2000));
 });
@@ -62,19 +63,19 @@ test('extractText truncates input to 2000 characters', () => {
 
 test('shouldProcess rejects self/echo messages', async () => {
   const ctx = makeCtx({ message: { key: { fromMe: true, remoteJid: 'x' } } });
-  assert.strictEqual(await pipeline.shouldProcess('halo', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('halo', ctx), false);
 });
 
 test('shouldProcess rejects duplicate message ids', async () => {
   const ctx = makeCtx({ messageId: 'dup-1' });
-  assert.strictEqual(await pipeline.shouldProcess('halo', ctx), true);
+  assert.strictEqual(await gk.shouldProcess('halo', ctx), true);
   const ctx2 = makeCtx({ messageId: 'dup-1' });
-  assert.strictEqual(await pipeline.shouldProcess('halo', ctx2), false);
+  assert.strictEqual(await gk.shouldProcess('halo', ctx2), false);
 });
 
 test('shouldProcess always replies in private chat', async () => {
   const ctx = makeCtx();
-  assert.strictEqual(await pipeline.shouldProcess('apa kabar?', ctx), true);
+  assert.strictEqual(await gk.shouldProcess('apa kabar?', ctx), true);
 });
 
 test('shouldProcess rejects group messages without mention/command', async () => {
@@ -87,7 +88,7 @@ test('shouldProcess rejects group messages without mention/command', async () =>
       message: { extendedTextMessage: { text: 'hai semua' } },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('hai semua', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('hai semua', ctx), false);
 });
 
 test('shouldProcess allows group message that mentions the bot', async () => {
@@ -105,7 +106,7 @@ test('shouldProcess allows group message that mentions the bot', async () => {
       },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('@6285000000000 ara', ctx), true);
+  assert.strictEqual(await gk.shouldProcess('@6285000000000 ara', ctx), true);
 });
 
 test('shouldProcess allows group message containing the command prefix', async () => {
@@ -118,7 +119,7 @@ test('shouldProcess allows group message containing the command prefix', async (
       message: { extendedTextMessage: { text: 'ara ceritakan jokes' } },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('ara ceritakan jokes', ctx), true);
+  assert.strictEqual(await gk.shouldProcess('ara ceritakan jokes', ctx), true);
 });
 
 test('shouldProcess rejects "arah/arab/arak/aray" in group (false prefix)', async () => {
@@ -131,10 +132,10 @@ test('shouldProcess rejects "arah/arab/arak/aray" in group (false prefix)', asyn
       message: { extendedTextMessage: { text: 'arah ke mana' } },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('arah ke mana', ctx), false);
-  assert.strictEqual(await pipeline.shouldProcess('arab saudi', ctx), false);
-  assert.strictEqual(await pipeline.shouldProcess('arak', ctx), false);
-  assert.strictEqual(await pipeline.shouldProcess('aray', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('arah ke mana', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('arab saudi', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('arak', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('aray', ctx), false);
 });
 
 test('shouldProcess responds to a group reply quoting the bot (no "ara" text)', async () => {
@@ -156,7 +157,7 @@ test('shouldProcess responds to a group reply quoting the bot (no "ara" text)', 
       },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('siap', ctx), true);
+  assert.strictEqual(await gk.shouldProcess('siap', ctx), true);
 });
 
 test('shouldProcess ignores a group reply quoting another user', async () => {
@@ -178,11 +179,11 @@ test('shouldProcess ignores a group reply quoting another user', async () => {
       },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('iya dong', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('iya dong', ctx), false);
 });
 
 test('shouldProcess responds to a group reply quoting a tracked bot message (stanzaId)', async () => {
-  pipeline.trackBotMessage('bot-msg-xyz');
+  gk.trackBotMessage('bot-msg-xyz');
   const ctx = makeCtx({
     isGroup: true,
     jid: '120363012345678@g.us',
@@ -202,7 +203,7 @@ test('shouldProcess responds to a group reply quoting a tracked bot message (sta
   });
   // No "ara" text, no @mention, no participant match — but the quoted stanzaId
   // is a message the bot actually sent, so it must respond.
-  assert.strictEqual(await pipeline.shouldProcess('wah bener', ctx), true);
+  assert.strictEqual(await gk.shouldProcess('wah bener', ctx), true);
 });
 
 test('shouldProcess ignores a group reply whose stanzaId is not a bot message', async () => {
@@ -223,7 +224,7 @@ test('shouldProcess ignores a group reply whose stanzaId is not a bot message', 
       },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('oke', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('oke', ctx), false);
 });
 
 test('shouldProcess matches bot JID across LID/device-suffix formats', async () => {
@@ -245,7 +246,7 @@ test('shouldProcess matches bot JID across LID/device-suffix formats', async () 
       },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('oke', ctx), true);
+  assert.strictEqual(await gk.shouldProcess('oke', ctx), true);
 });
 
 
@@ -256,7 +257,7 @@ test('shouldProcess ignores sticker media (no media handling yet)', async () => 
       message: { stickerMessage: {} },
     },
   });
-  assert.strictEqual(await pipeline.shouldProcess('caption', ctx), false);
+  assert.strictEqual(await gk.shouldProcess('caption', ctx), false);
 });
 
 test('shouldProcess rejects owner-only commands (ara fresh / ara status)', async () => {
@@ -268,32 +269,32 @@ test('shouldProcess rejects owner-only commands (ara fresh / ara status)', async
     },
   });
   process.env.OWNER_NUMBER = '6285000000000';
-  const ownerPipe = await import('../src/pipeline.js?owner=1');
-  assert.strictEqual(await ownerPipe.shouldProcess('ara fresh', ctx), false);
-  assert.strictEqual(await ownerPipe.shouldProcess('ara status', ctx), false);
+  const ownerGate = await import('../src/gatekeeper.js?owner=1');
+  assert.strictEqual(await ownerGate.shouldProcess('ara fresh', ctx), false);
+  assert.strictEqual(await ownerGate.shouldProcess('ara status', ctx), false);
 });
 
 // ───────────────────────── blacklist / whitelist ─────────────────────────
 
 test('shouldProcess rejects blacklisted senders', async () => {
-  const p = await import('../src/pipeline.js?bl=1');
-  p.setBlacklist(['6281111111111@s.whatsapp.net']);
+  const gkB = await import('../src/gatekeeper.js?bl=1');
+  gkB.setBlacklist(['6281111111111@s.whatsapp.net']);
   const ctx = makeCtx({ sender: '6281111111111@s.whatsapp.net' });
-  assert.strictEqual(await p.shouldProcess('halo', ctx), false);
+  assert.strictEqual(await gkB.shouldProcess('halo', ctx), false);
   const ok = makeCtx({ sender: '6282222222222@s.whatsapp.net' });
-  assert.strictEqual(await p.shouldProcess('halo', ok), true);
+  assert.strictEqual(await gkB.shouldProcess('halo', ok), true);
 });
 
 test('shouldProcess enforces whitelist (owner + listed only)', async () => {
   process.env.WHITELIST = '6282222222222@s.whatsapp.net';
   process.env.OWNER_NUMBER = '6289999999999@s.whatsapp.net';
-  const p = await import('../src/pipeline.js?wl=1');
+  const gkW = await import('../src/gatekeeper.js?wl=1');
   const blocked = makeCtx({ sender: '6283333333333@s.whatsapp.net' });
-  assert.strictEqual(await p.shouldProcess('halo', blocked), false);
+  assert.strictEqual(await gkW.shouldProcess('halo', blocked), false);
   const listed = makeCtx({ sender: '6282222222222@s.whatsapp.net' });
-  assert.strictEqual(await p.shouldProcess('halo', listed), true);
+  assert.strictEqual(await gkW.shouldProcess('halo', listed), true);
   const owner = makeCtx({ sender: '6289999999999@s.whatsapp.net' });
-  assert.strictEqual(await p.shouldProcess('halo', owner), true);
+  assert.strictEqual(await gkW.shouldProcess('halo', owner), true);
 });
 
 // ───────────────────────── processLLM ─────────────────────────
@@ -524,14 +525,14 @@ test('processLLM keeps single-line reply as 1 bubble', async () => {
 
 test('shouldProcess flags badword but does NOT block the message', async () => {
   const ctx = makeCtx();
-  const ok = await pipeline.shouldProcess('kau anjing!', ctx);
+  const ok = await gk.shouldProcess('kau anjing!', ctx);
   assert.strictEqual(ok, true, 'badword must not block (PRD §5.7)');
   assert.strictEqual(ctx.badword, true, 'ctx.badword should be flagged');
 });
 
 test('shouldProcess leaves ctx.badword unset for clean text', async () => {
   const ctx = makeCtx();
-  await pipeline.shouldProcess('halo ara, apa kabar?', ctx);
+  await gk.shouldProcess('halo ara, apa kabar?', ctx);
   assert.strictEqual(ctx.badword, undefined);
 });
 
@@ -951,7 +952,7 @@ test('loadBlacklist reads from Redis', async () => {
       return '{"blacklist":"123,456"}';
     },
   };
-  const p = await import('../src/pipeline.js?loadbl=1');
+  const p = await import('../src/gatekeeper.js?loadbl=1');
   await p.loadBlacklist(fakeRedis);
   const blocked = makeCtx({ sender: '123@s.whatsapp.net' });
   assert.strictEqual(await p.shouldProcess('halo', blocked), false);
@@ -964,7 +965,7 @@ test('setBlacklist updates in-memory list', async () => {
   delete process.env.BLACKLIST;
   delete process.env.WHITELIST;
   delete process.env.OWNER_NUMBER;
-  const p = await import('../src/pipeline.js?sbl=1');
+  const p = await import('../src/gatekeeper.js?sbl=1');
   p.setBlacklist(['111', '222']);
   const blocked = makeCtx({ sender: '111@s.whatsapp.net' });
   assert.strictEqual(await p.shouldProcess('halo', blocked), false);
@@ -977,7 +978,7 @@ test('setBlacklist normalizes numbers', async () => {
   delete process.env.BLACKLIST;
   delete process.env.WHITELIST;
   delete process.env.OWNER_NUMBER;
-  const p = await import('../src/pipeline.js?sbln=1');
+  const p = await import('../src/gatekeeper.js?sbln=1');
   p.setBlacklist(['628xxx']);
   const blocked = makeCtx({ sender: '628@s.whatsapp.net' });
   assert.strictEqual(await p.shouldProcess('halo', blocked), false);

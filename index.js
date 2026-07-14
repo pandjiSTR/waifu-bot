@@ -7,7 +7,8 @@ import pino from 'pino';
 import { createRedisClient, closeRedis } from './src/redis.js';
 import { validateAuthConfig, handleLogin, handleLogout, requireAuth } from './src/auth.js';
 import { loadPersonality } from './src/personality.js';
-import { loadBlacklist, setCircuitBreakerEnabled } from './src/pipeline.js';
+import { loadBlacklist } from './src/gatekeeper.js';
+import { setCircuitBreakerEnabled } from './src/pipeline.js';
 import { initWhatsApp } from './src/baileys.js';
 import { startAutoChat } from './src/autochat.js';
 import {

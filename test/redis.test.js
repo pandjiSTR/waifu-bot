@@ -26,11 +26,6 @@ test('set is a safe no-op when client is null', async () => {
   await assert.doesNotReject(redis.set('k', 'v', 60));
 });
 
-test('exists returns false when client is null', async () => {
-  const result = await redis.exists('some-key');
-  assert.strictEqual(result, false);
-});
-
 test('lrange returns empty array when client is null', async () => {
   const result = await redis.lrange('some-list', 0, -1);
   assert.deepStrictEqual(result, []);
@@ -46,11 +41,8 @@ test('llen/llen returns 0 when client is null', async () => {
   assert.strictEqual(result, 0);
 });
 
-test('del/sadd/smembers are safe no-ops when client is null', async () => {
+test('del is a safe no-op when client is null', async () => {
   await assert.doesNotReject(redis.del('a', 'b'));
-  await assert.doesNotReject(redis.sadd('s', 'm'));
-  const members = await redis.smembers('s');
-  assert.deepStrictEqual(members, []);
 });
 
 test('closeRedis is a safe no-op when client is null', async () => {

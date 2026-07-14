@@ -1,24 +1,14 @@
 import pino from 'pino';
+import { normalizeNumber, getOwnerNumbers } from './util.js';
 import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
 import { getWindow, addMessage } from './context.js';
+import { isOpen } from './circuit.js';
+import { naturalizeReply, guardLaughs } from './naturalize.js';
+import { sendChunks } from './chunks.js';
+import { createTypingPulse } from './dispatch.js';
 
 const logger = pino({ name: 'autochat', level: process.env.LOG_LEVEL || 'warn' });
-
-// ── Owner number parsing (mirrors pipeline.js logic) ──
-
-function normalizeNumber(n) {
-  if (!n) return '';
-  return String(n)
-    .replace(/@s\.whatsapp\.net$/, '')
-    .replace(/:\d+$/, '') // strip device suffix, e.g. :0 in 628...:0@s.whatsapp.net
-    .replace(/[^0-9]/g, '');
-}
-
-const OWNER_NUMBERS = (process.env.OWNER_NUMBER || '')
-  .split(',')
-  .map(normalizeNumber)
-  .filter(Boolean);
 
 const AUTO_CHAT_INTERVAL_MS = parseInt(
   process.env.AUTO_CHAT_INTERVAL_MS || '3600000',
@@ -88,8 +78,7 @@ export async function maybeProactive(ctx) {
   if (!(await isAutoChatEnabled(redis))) return;
 
   // Guard 2: circuit breaker must not be open
-  const circuit = await import('./circuit.js');
-  if (circuit.isOpen()) {
+  if (isOpen()) {
     logger.warn('circuit open — skipping proactive message');
     return;
   }
@@ -120,7 +109,7 @@ export async function maybeProactive(ctx) {
   // Guard 5: probability gate (~40 %)
   if (Math.random() > PROBABILITY) return;
 
-  const ownerDigits = OWNER_NUMBERS[0];
+  const ownerDigits = getOwnerNumbers()[0];
   if (!ownerDigits || !sock) return;
 
   const ownerJid = ownerDigits + '@s.whatsapp.net';
@@ -155,10 +144,7 @@ export async function maybeProactive(ctx) {
     );
 
     if (text) {
-      const { naturalizeReply, guardLaughs } = await import('./naturalize.js');
-      const { sendChunks: realChunksFn } = await import('./chunks.js');
-      const { createTypingPulse } = await import('./typing.js');
-      const chunksFn = ctx.sendChunks || realChunksFn;
+      const chunksFn = ctx.sendChunks || sendChunks;
       const normalized = guardLaughs(naturalizeReply(text));
       const pulse = createTypingPulse((t) => sock?.sendPresenceUpdate?.(t, ownerJid).catch?.(() => {}));
       try {
