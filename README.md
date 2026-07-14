@@ -5,32 +5,71 @@
 <h1 align="center">Waifu Bot</h1>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-256%20passing-green" alt="Tests"></a>
-  <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
-  <a href="#"><img src="https://img.shields.io/badge/ollama-cloud-white?logo=ollama" alt="Ollama"></a>
+  <img src="https://img.shields.io/github/last-commit/pandjiSTR/waifu-bot?logo=github&label=updated" alt="Last Commit">
+  <img src="https://img.shields.io/github/repo-size/pandjiSTR/waifu-bot" alt="Repo Size">
+  <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node">
+  <img src="https://img.shields.io/badge/tests-256%20passing-green" alt="Tests">
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
+  <img src="https://img.shields.io/badge/deploy-Render-blue?logo=render" alt="Render">
 </p>
 
 <p align="center">
-  <b>Personal WhatsApp AI Chatbot</b> built with Ollama Cloud, Baileys, and Redis.
-  <br>
-  Orang sungguhan di WhatsApp — bukan asisten kaku.
+  Personal WhatsApp AI Chatbot — powered by Ollama Cloud, built with Baileys, backed by Redis.
 </p>
 
 ---
 
-## Highlights
+## Features
 
-| | | |
+| | Feature | Description |
 |---|---|---|
-| 🧠 **LLM-Powered** | Ollama Cloud — smart, fast, konteks 30-50 pesan |
-| 📸 **Vision + PDF** | Baca gambar (describe) & dokumen PDF langsung |
-| 🔍 **Web Search** | Cari info real-time kalo ditanya |
-| 🖼️ **Sticker Maker** | Gambar &rarr; WebP sticker otomatis |
-| 💭 **Friend Memory** | Inget fakta & mood tiap orang |
-| 🛡️ **Circuit Breaker** | Auto-cooldown kalo LLM error |
-| 📊 **Dashboard** | 9 halaman: chat, analytics, logs, debug |
-| ⚡ **Parallel Processing** | Context + media + memory loading bersamaan |
+| 🧠 | **LLM-Powered** | Ollama Cloud — smart, fast, context-aware (30-50 messages) |
+| 💬 | **Natural Conversation** | Personality-driven replies — cold start, warm hugs |
+| 📸 | **Vision (Image Analysis)** | Describe, identify, react to photos in chat |
+| 📄 | **PDF Extraction** | Read and summarize PDF documents directly |
+| 🔍 | **Web Search** | Real-time search integration when asked about facts |
+| 🖼️ | **Sticker Maker** | Image &rarr; WebP sticker via Sharp |
+| 💭 | **Friend Memory** | Remembers facts, mood, and relationship per user |
+| 😂 | **Laugh Guard** | Context-aware laugh suppression — never over-laughs |
+| 🗂️ | **Context Window** | Sliding window with auto-summarization for long convos |
+| 🛡️ | **Circuit Breaker** | Auto-cooldown on LLM failure — prevents cascading errors |
+| 📊 | **Dashboard** | 9 SPA pages: overview, chat, analytics, logs, debug, settings |
+| 🔐 | **Auth** | JWT + bcrypt — dashboard protected |
+| ⚡ | **Parallel Processing** | Context loading + media processing + friend memory in parallel |
+| 🚦 | **Rate Limiting** | Per-JID message dedup + rate limiting |
+| 🔄 | **Auto-Retry** | Message delivery with exponential backoff (3 retries) |
+| 📅 | **Proactive Chat** | Auto-send periodic messages to owner |
+| 🗑️ | **Badword Detection** | Detects badwords, shifts tone to sarcastic (doesn't block) |
+| 🔎 | **Search Loop** | Up to 2 search iterations, 30s timeout via AbortController |
+| 💾 | **Durable Storage** | Upstash Redis — persistence across restarts |
+| 🌐 | **Group Aware** | Responds to mentions, replies, and "ara" prefix in groups |
+| 📋 | **Blacklist/Whitelist** | Sender-level access control |
+
+---
+
+## Tech Stack
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-20-339933?logo=node.js" alt="Node.js">
+  <img src="https://img.shields.io/badge/Redis-Upstash-DC382D?logo=redis" alt="Redis">
+  <img src="https://img.shields.io/badge/Ollama-Cloud-000?logo=ollama" alt="Ollama">
+  <img src="https://img.shields.io/badge/Baileys-WhatsApp-25D366?logo=whatsapp" alt="Baileys">
+  <img src="https://img.shields.io/badge/JWT-auth-000?logo=jsonwebtokens" alt="JWT">
+  <img src="https://img.shields.io/badge/bcrypt-auth-3178C6" alt="bcrypt">
+  <img src="https://img.shields.io/badge/Pino-logging-000" alt="Pino">
+  <img src="https://img.shields.io/badge/Sharp-images-99CC00?logo=sharp" alt="Sharp">
+  <img src="https://img.shields.io/badge/pdfjs-PDF-EC1C24" alt="pdfjs">
+  <img src="https://img.shields.io/badge/Chart.js-4.0-FF6384?logo=chartdotjs" alt="Chart.js">
+</p>
+
+---
+
+## Prerequisites
+
+- **Node.js &gt;=20** — [download](https://nodejs.org)
+- **Ollama Cloud account** — [sign up](https://ollama.com)
+- **Upstash Redis** — [sign up](https://upstash.com) (free 256MB tier)
+- **WhatsApp number** — a separate SIM/eSIM for the bot (recommended)
 
 ---
 
@@ -40,51 +79,136 @@
 git clone <repo-url> waifu-bot
 cd waifu-bot
 cp .env.example .env
-# edit .env — isi API key, Redis, dll
 npm install
 npm run build
 npm start
 ```
-
-> Butuh **Node.js &gt;=20** dan akun [Ollama Cloud](https://ollama.com) + [Upstash Redis](https://upstash.com).
 
 ---
 
 ## Architecture
 
 ```
-index.js                       Entry point
-+-- src/                       20 modules
-|   +-- baileys.js             WhatsApp connection
-|   +-- gatekeeper.js          Filter: who gets a reply?
-|   +-- pipeline.js            Brain: orchestrate LLM + search + memory
-|   +-- llm.js                 Ollama Cloud client
-|   +-- context.js             Sliding window + summarization
-|   +-- memory.js              Facts & mood per user
-|   +-- media.js               Vision & PDF
-|   +-- search.js              Web search integration
-|   +-- chunks.js              Reliable message delivery
-|   +-- ...                    11 more focused modules
-+-- dashboard/                 SPA: 9 pages
-+-- test/                      256 tests (node:test)
-+-- personality.txt            Bot identity (gitignored)
-+-- logo.svg
+waifu-bot/
+├── index.js                    HTTP server + WhatsApp init
+├── src/                        Core modules
+│   ├── baileys.js              WhatsApp WebSocket connection + auth
+│   ├── gatekeeper.js           Message filter: dedup, blacklist, whitelist
+│   ├── pipeline.js             processLLM — brain of the bot
+│   ├── llm.js                  Ollama Cloud client (retry, timeout, circuit)
+│   ├── context.js              Sliding window + Redis-backed summarization
+│   ├── memory.js               Per-user facts + mood
+│   ├── media.js                Vision (image) + PDF extraction
+│   ├── search.js               Web search via Ollama Cloud
+│   ├── naturalize.js           Reply normalization (laugh guard, spacing)
+│   ├── chunks.js               Message split + delivery with retry
+│   ├── circuit.js              Circuit breaker (threshold, cooldown, alert)
+│   ├── badwords.js             Static badword detection list
+│   ├── sticker.js              Sharp-based image &rarr; WebP sticker
+│   ├── autochat.js             Proactive messaging scheduler
+│   ├── dispatch.js             Per-JID serial queue + typing indicator
+│   ├── personality.js          Loader & editor for personality.txt
+│   ├── auth.js                 JWT + bcrypt auth middleware
+│   ├── api-skeleton.js         27 dashboard API endpoints
+│   ├── redis.js                Redis client + scanAll helper
+│   └── util.js                 Shared utilities
+├── dashboard/                  SPA: 9 pages
+│   ├── index.html              SPA shell
+│   ├── app.js                  SPA engine
+│   ├── login.html              Login page
+│   ├── overview.html           Stats overview
+│   ├── chat.html               Chat history
+│   ├── analytics.html          Charts & trends
+│   ├── settings.html           Settings
+│   ├── logs.html               System logs
+│   └── debug.html              Debug diagnostics
+├── test/                       20 files, 256 tests
+├── personality.txt             Bot persona (gitignored)
+├── personality.txt.example     Template with persona structure
+├── logo.svg                    Bot logo
+└── dashboard/out/              Built dashboard (deploy target)
 ```
 
 ### Message Flow
 
 ```
-WhatsApp &rarr; Baileys &rarr; gatekeeper.shouldProcess()
-  (dedup, blacklist, whitelist, group rules)
-  |
-  v
-pipeline.processLLM()
-  +- Parallel: context + media + memory
-  +- System prompt &rarr; LLM call
-  +- Search loop (&le;2x, auto-timeout 30s)
-  +- Memory extraction (fire-and-forget)
-  +- Naturalize &rarr; split &rarr; send chunks
+┌──────────────┐
+│  WhatsApp    │  Message arrives via Baileys WebSocket
+└──────┬───────┘
+       ▼
+┌──────────────┐
+│  dispatch.js │  Per-JID serial queue + typing pulse
+└──────┬───────┘
+       ▼
+┌──────────────┐
+│ gatekeeper   │  shouldProcess():
+│              │  • Self-message? → reject
+│              │  • Duplicate? → reject (memory + Redis NX)
+│              │  • Blacklisted? → reject
+│              │  • Whitelist active? → check
+│              │  • Group? → mention/reply check
+│              │  • Sticker? → reject
+└──────┬───────┘
+       ▼ (passes)
+┌─────────────────────────────────┐
+│  pipeline.processLLM()          │
+│                                 │
+│  ┌─ Parallel ───────────────┐  │
+│  │  context.getWindow()     │  │
+│  │  media.describeImage()   │  │
+│  │  memory.getFriend()      │  │
+│  └──────────────────────────┘  │
+│            ▼                    │
+│  Build system prompt + LLM call│
+│            ▼                    │
+│  [SEARCH LOOP] (≤2 iter, 30s)  │
+│  Has [SEARCH]? → webSearch →   │
+│  LLM again                    │
+│            ▼                    │
+│  Memory tokens → persist       │
+│  (fire-and-forget)            │
+│            ▼                    │
+│  Naturalize → split → send    │
+│  chunks → WhatsApp              │
+│            ▼                    │
+│  Context summarization         │
+│  (fire-and-forget)             │
+└─────────────────────────────────┘
 ```
+
+---
+
+## API Endpoints
+
+| Method | Path | Description | Auth |
+|---|---|---|---|
+| GET | /api/overview | Dashboard overview stats | ✅ |
+| GET | /api/friends | Friend list with mood & counts | ✅ |
+| GET | /api/settings | Current settings | ✅ |
+| PUT | /api/settings | Update settings | ✅ |
+| GET | /api/logs | System logs (last 100) | ✅ |
+| POST | /api/logs/clear | Clear logs | ✅ |
+| GET | /api/chat/contacts | All contacts + groups | ✅ |
+| GET | /api/chat/context | Chat history for a number | ✅ |
+| GET | /api/analytics/trend | Daily message trend | ✅ |
+| GET | /api/analytics/top-friends | Top friends by activity | ✅ |
+| GET | /api/analytics/hourly | 24h activity distribution | ✅ |
+| GET | /api/analytics/today | Today's stats | ✅ |
+| GET | /api/analytics/messages | 7-day message data | ✅ |
+| GET | /api/friends/:id/memory | Friend memory data | ✅ |
+| PUT | /api/friends/:id/memory | Update friend memory | ✅ |
+| DELETE | /api/friends/:id/memory | Clear friend memory | ✅ |
+| GET | /api/debug | Circuit breaker + uptime | ✅ |
+| GET | /api/personality | Get personality content | ✅ |
+| PUT | /api/personality | Update personality | ✅ |
+| GET | /api/qr | Get QR code (when pairing) | ✅ |
+| GET | /api/blacklist | Get blacklist | ✅ |
+| PUT | /api/blacklist | Update blacklist | ✅ |
+| GET | /api/circuit-breaker | Circuit breaker status | ✅ |
+| PUT | /api/circuit-breaker | Toggle circuit breaker | ✅ |
+| GET | /api/autochat/toggle | Auto-chat status | ✅ |
+| PUT | /api/autochat/toggle | Toggle auto-chat | ✅ |
+| POST | /api/auth/login | Login (returns JWT) | ❌ |
 
 ---
 
@@ -92,27 +216,34 @@ pipeline.processLLM()
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `OLLAMA_API_KEY` | &check; | — | Ollama Cloud API key |
-| `BOT_NUMBER` | &check; | — | Bot WhatsApp number |
-| `OWNER_NUMBER` | &check; | — | Owner JID (comma-separated) |
-| `DASHBOARD_PASSWORD_HASH` | &check; | — | bcrypt hash of password |
-| `JWT_SECRET` | &check; | — | JWT signing secret |
-| `REDIS_URL` | &check; | — | Upstash Redis (rediss://) |
+| `OLLAMA_API_KEY` | ✅ | — | Ollama Cloud API key |
+| `BOT_NUMBER` | ✅ | — | Bot WhatsApp number |
+| `OWNER_NUMBER` | ✅ | — | Owner JID (comma-separated) |
+| `DASHBOARD_PASSWORD_HASH` | ✅ | — | bcrypt hash of password |
+| `JWT_SECRET` | ✅ | — | JWT signing secret |
+| `REDIS_URL` | ✅ | — | Upstash Redis (rediss://) |
 | `OLLAMA_MODEL` | — | `gemma4:31b-cloud` | LLM model |
-| `SEARCH_LOOP_TIMEOUT_MS` | — | `30000` | Search timeout |
+| `OLLAMA_TIMEOUT_MS` | — | `60000` | LLM request timeout |
+| `SEARCH_LOOP_TIMEOUT_MS` | — | `30000` | Search loop timeout |
+| `CIRCUIT_BREAKER_THRESHOLD` | — | `5` | Failures before cooldown |
+| `CIRCUIT_BREAKER_COOLDOWN_MS` | — | `300000` | Cooldown duration (5 min) |
+| `MAX_CONTEXT_MESSAGES` | — | `30` | Context window (private) |
+| `MAX_GROUP_CONTEXT_MESSAGES` | — | `50` | Context window (group) |
+| `PORT` | — | `10000` | HTTP server port |
+| `LOG_LEVEL` | — | `warn` | Pino log level |
 
-> Full list di `.env.example` — include semua optional vars.
+> Full list with all optional vars in `.env.example`.
 
 ---
 
-## Deploy ke Render + Upstash
+## Deploy
 
-### 1. Database (Upstash Redis)
+### 1. Upstash Redis
 
 Buat akun [upstash.com](https://upstash.com) &rarr; Create Redis &rarr; copas `REDIS_URL`.
 Free tier 256MB cukup buat weeks of chat history.
 
-### 2. App (Render)
+### 2. Render
 
 | Step | Detail |
 |---|---|
@@ -123,14 +254,39 @@ Free tier 256MB cukup buat weeks of chat history.
 | Env Variables | Isi semua required vars dari `.env.example` |
 | Deploy | Tombol hijau &rarr; tunggu ~2 menit |
 
-### 3. Biar Gak Tidur (UptimeRobot)
+### 3. UptimeRobot (optional)
 
 ```
 Monitor &rarr; HTTP(s) &rarr; https://app-kamu.onrender.com/health
 Interval &rarr; 5 menit
 ```
 
-Render free tier spin down after idle 15 menit. UptimeRobot jagain tetap hangat.
+Render free tier spin down setelah 15 menit idle. UptimeRobot jagain tetap hangat.
+
+---
+
+## Monitoring
+
+| Tool | Detail |
+|---|---|
+| **Dashboard** | `http://host:PORT/` — 9 SPA pages |
+| **Health Check** | `GET /health` — for UptimeRobot |
+| **Circuit Breaker** | Auto-recovers after cooldown, owner alerted via WA |
+| **Logs** | Pino (warn level), Redis-backed (last 500 entries) |
+| **LLM Timing** | Every call duration tracked, viewable in dashboard |
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| Bot not responding in groups | Make sure "ara" is mentioned or message is a reply to bot |
+| "Circuit breaker open" error | Wait ~5 minutes — LLM had repeated failures, auto-recovers |
+| Dashboard shows "no-redis" | Check `REDIS_URL` in .env — connection issue |
+| QR code not appearing | Set `WA_PRINT_QR=true` or check Redis connection |
+| Render cold start slow | Normal — free tier cold start ~30s after idle |
+| Tests fail with Redis errors | `NODE_ENV=test` disables Redis — check env setup |
 
 ---
 
@@ -141,7 +297,7 @@ npm test       # 256 tests, node:test native
 npm run lint   # ESLint
 ```
 
-Covers: auth, badwords, chunks, circuit, context, dispatch, gatekeeper, llm, media, memory, naturalize, personality, pipeline, redis, search, sticker, scenario.
+Coverage: auth, autochat, badwords, chunks, circuit, circuit-alert, context, dispatch, gatekeeper, llm, media, memory, naturalize, personality, pipeline, redis, search, sticker, scenario (19 test files).
 
 ---
 
@@ -162,5 +318,17 @@ Covers: auth, badwords, chunks, circuit, context, dispatch, gatekeeper, llm, med
 - **ESM only** — `import`/`export`, no CommonJS
 - **No emoji** in bot responses (per personality.txt)
 - **Async/await** throughout
-- **Pino** for logging
+- **Pino** for logging (warn level in production)
 - **personality.txt** = single source of truth for bot persona
+
+---
+
+## License
+
+MIT License — use freely, fork, modify.
+
+---
+
+<p align="center">
+  Built with ❤️ using Node.js, Baileys, and Ollama Cloud
+</p>
