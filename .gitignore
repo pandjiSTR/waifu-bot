@@ -17,3 +17,5 @@ Thumbs.db
 .idea/
 
 
+PROMPT.md
+.orchestrator/kanban.json
