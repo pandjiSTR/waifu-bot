@@ -247,7 +247,7 @@ export async function processLLM(body, ctx) {
   let reply;
   try {
     reply = await chatFn(messages, {
-      options: { num_ctx: isGroup ? 8192 : 4096 },
+      options: { num_ctx: isGroup ? 8192 : 4096, temperature: 0.9 },
     });
     // Record LLM call timing (fire-and-forget)
     if (ctx.redis) {
