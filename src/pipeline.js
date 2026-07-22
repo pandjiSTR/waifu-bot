@@ -117,12 +117,8 @@ export async function processLLM(body, ctx) {
 
 
 
-  // Persist the user's message FIRST so the next turn includes it.
-  const persistPromise = addMessage(ctx.redis, userId, { sender: ctx.senderId, text: body, timestamp: new Date().toISOString() }, isGroup);
-
-  // Fase 6 (§5.6): start media extraction for image/PDF in parallel with
-  // context loading — both are independent and the user doesn't need to wait
-  // for both sequentially. Falls back to ctx.mediaContext for test injection.
+  // User message is already persisted in discord.js before gatekeeper.
+  // Start media extraction for image/PDF in parallel with context loading.
   const mediaPromise = (async () => {
     if (ctx.mediaContext) return ctx.mediaContext;
     const attachment = ctx.message?.attachments?.first();
@@ -144,9 +140,9 @@ export async function processLLM(body, ctx) {
     return null;
   })();
 
-  // Run message persist, context loading, and friend memory in parallel
+  // Run context loading, media extraction, and friend memory in parallel
   const [window, mem] = await Promise.all([
-    persistPromise.then(() => getWindow(ctx.redis, userId, isGroup)),
+    getWindow(ctx.redis, userId, isGroup),
     getFriendMemory(ctx.redis, ctx.senderId),
   ]);
   const mediaContext = await mediaPromise;
@@ -189,7 +185,7 @@ export async function processLLM(body, ctx) {
   systemPrompt += MULTI_MESSAGE_INSTRUCTION;
 
   // Build the LLM message list from the window returned by getWindow, which
-  // ALREADY includes the current user message (persisted above via addMessage).
+  // ALREADY includes the current user message (persisted in discord.js).
   // Do NOT append the current message again — that would double-send it.
   const messages = [
     { role: 'system', content: systemPrompt },

@@ -1,5 +1,6 @@
 import { Client, GatewayIntentBits } from 'discord.js';
 import pino from 'pino';
+import { addMessage } from './context.js';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn', name: 'discord' });
 let connectionState = 'disconnected';
@@ -31,8 +32,14 @@ export async function initDiscord(redis, dispatcher, gatekeeper) {
       redis.hset('waifu:friends:names', msg.author.id, name).catch(() => {});
     }
 
+    // Save ALL messages to context before gatekeeper, so Ara can see
+    // full chat history even when not directly addressed.
     const body = (msg.content || '').slice(0, 2000);
     const isGroup = !!msg.guildId;
+    if (redis) {
+      addMessage(redis, msg.channelId, { sender: msg.author.id, text: body, timestamp: new Date().toISOString() }, isGroup)
+        .catch(() => {});
+    }
 
     const ctx = {
       _discordClient: client,
@@ -71,6 +78,10 @@ export async function initDiscord(redis, dispatcher, gatekeeper) {
         if (!channel) return;
 
         const body = (d.content || '').slice(0, 2000);
+
+        // Save DM to context before gatekeeper
+        addMessage(redis, d.channel_id, { sender: d.author.id, text: body, timestamp: new Date().toISOString() }, false)
+          .catch(() => {});
 
         const ctx = {
           _discordClient: client,
