@@ -172,6 +172,12 @@ export async function main() {
   await loadBlacklist(redis);
   await loadPersonality(redis);
 
+  // Seed owner name in Redis name map so context shows "Bakwan" not the numeric ID
+  if (redis && process.env.OWNER_DISCORD_ID) {
+    redis.hset('waifu:friends:names', process.env.OWNER_DISCORD_ID, process.env.OWNER_NAME || 'Owner')
+      .catch(() => {});
+  }
+
   const dispatcher = createDispatcher({ processLLM });
   const { client, stop: stopDiscord } = await initDiscord(redis, dispatcher, {
     shouldProcess: (await import('./src/gatekeeper.js')).shouldProcess,

@@ -25,6 +25,12 @@ export async function initDiscord(redis, dispatcher, gatekeeper) {
     if (msg.author.bot) return;
     if (!msg.content && msg.attachments.size === 0) return;
 
+    // Save display name to Redis (fire-and-forget)
+    if (redis) {
+      const name = msg.author.globalName || msg.author.username;
+      redis.hset('waifu:friends:names', msg.author.id, name).catch(() => {});
+    }
+
     const body = (msg.content || '').slice(0, 2000);
     const isGroup = !!msg.guildId;
 
