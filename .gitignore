@@ -16,5 +16,4 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Personality (contains bot identity)
-personality.txt
+
