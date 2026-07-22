@@ -22,7 +22,7 @@ function makeFakeRedis(seed = {}) {
 
 // Helper to suppress pino output during tests.
 process.env.LOG_LEVEL = 'silent';
-process.env.OWNER_NUMBER = '6285000000000';
+process.env.OWNER_DISCORD_ID = '6285000000000';
 
 // ───────────────────────── isAutoChatEnabled / setAutoChat ─────────────────────────
 
@@ -190,9 +190,9 @@ test('maybeProactive sends nothing when no owner is configured', async () => {
   const circuit = await import('../src/circuit.js');
   circuit.__reset();
 
-  // Temporarily clear OWNER_NUMBER
-  const origOwner = process.env.OWNER_NUMBER;
-  delete process.env.OWNER_NUMBER;
+  // Temporarily clear OWNER_DISCORD_ID
+  const origOwner = process.env.OWNER_DISCORD_ID;
+  delete process.env.OWNER_DISCORD_ID;
 
   const redis = makeFakeRedis({ 'waifu:autochat:enabled': '1' });
   const origRandom = Math.random;
@@ -212,9 +212,9 @@ test('maybeProactive sends nothing when no owner is configured', async () => {
   });
 
   Math.random = origRandom;
-  process.env.OWNER_NUMBER = origOwner;
+  process.env.OWNER_DISCORD_ID = origOwner;
 
-  assert.strictEqual(sentText, null, 'no message without owner number');
+  assert.strictEqual(sentText, null, 'no message without owner discord id');
 });
 
 // ───────────────────────── startAutoChat ─────────────────────────

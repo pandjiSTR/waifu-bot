@@ -16,6 +16,10 @@ function makeCtx(overrides = {}) {
       content: 'halo',
       author: { id: 'user123456' },
       client: { user: { id: 'ara-bot-id' } },
+      mentions: {
+        has: () => false,
+        repliedUser: null,
+      },
     },
     redis: null,
     ...overrides,
@@ -81,7 +85,7 @@ test('shouldProcess rejects duplicate message ids', async () => {
 
 // ───────────────────────── shouldProcess — group/guild ─────────────────────────
 
-test('shouldProcess rejects group messages without mention/prefix/ara', async () => {
+test('shouldProcess rejects group messages without mention/reply/allowed-channel', async () => {
   const ctx = makeCtx({
     isGroup: true,
     channelId: 'guild-channel-123',
@@ -90,6 +94,7 @@ test('shouldProcess rejects group messages without mention/prefix/ara', async ()
       content: 'hai semua',
       author: { id: 'user123456' },
       client: { user: { id: 'ara-bot-id' } },
+      mentions: { has: () => false, repliedUser: null },
     },
   });
   assert.strictEqual(await gk.shouldProcess('hai semua', ctx), false);
@@ -104,12 +109,28 @@ test('shouldProcess allows group message that mentions the bot', async () => {
       content: '<@ara-bot-id> halo',
       author: { id: 'user123456' },
       client: { user: { id: 'ara-bot-id' } },
+      mentions: { has: (id) => id === 'ara-bot-id', repliedUser: null },
     },
   });
   assert.strictEqual(await gk.shouldProcess('<@ara-bot-id> halo', ctx), true);
 });
 
-test('shouldProcess allows group message containing the "ara" keyword', async () => {
+test('shouldProcess allows group message that is a reply to bot', async () => {
+  const ctx = makeCtx({
+    isGroup: true,
+    channelId: 'guild-channel-123',
+    senderId: 'user123456',
+    message: {
+      content: 'iya betul',
+      author: { id: 'user123456' },
+      client: { user: { id: 'ara-bot-id' } },
+      mentions: { has: () => false, repliedUser: { id: 'ara-bot-id' } },
+    },
+  });
+  assert.strictEqual(await gk.shouldProcess('iya betul', ctx), true);
+});
+
+test('shouldProcess allows group message with "ara" keyword (name called)', async () => {
   const ctx = makeCtx({
     isGroup: true,
     channelId: 'guild-channel-123',
@@ -118,28 +139,48 @@ test('shouldProcess allows group message containing the "ara" keyword', async ()
       content: 'ara ceritakan jokes',
       author: { id: 'user123456' },
       client: { user: { id: 'ara-bot-id' } },
+      mentions: { has: () => false, repliedUser: null },
     },
   });
   assert.strictEqual(await gk.shouldProcess('ara ceritakan jokes', ctx), true);
 });
 
-test('shouldProcess allows group message with command prefix', async () => {
-  process.env.COMMAND_PREFIX = '!ara';
-  const gkP = await import('../src/gatekeeper.js?prefix1=1');
-  const ctx = makeCtx({
-    isGroup: true,
-    channelId: 'guild-channel-123',
-    senderId: 'user123456',
+test('shouldProcess allows "araa" / "araaa" variations as name call', async () => {
+  const base = {
+    isGroup: true, channelId: 'guild-channel-123',
     message: {
-      content: '!ara status',
-      author: { id: 'user123456' },
+      content: 'araa', author: { id: 'user123456' },
       client: { user: { id: 'ara-bot-id' } },
+      mentions: { has: () => false, repliedUser: null },
     },
-  });
-  assert.strictEqual(await gkP.shouldProcess('!ara status', ctx), true);
+  };
+  assert.strictEqual(await gk.shouldProcess('araa', makeCtx(base)), true);
+  assert.strictEqual(await gk.shouldProcess('araaa', makeCtx(base)), true);
+  assert.strictEqual(await gk.shouldProcess('araaaa', makeCtx(base)), true);
+  assert.strictEqual(await gk.shouldProcess('arah', makeCtx(base)), false);
+  assert.strictEqual(await gk.shouldProcess('arab', makeCtx(base)), false);
+  assert.strictEqual(await gk.shouldProcess('arak', makeCtx(base)), false);
 });
 
-test('shouldProcess rejects false prefix "arah/arab/arak/aray" in group', async () => {
+test('shouldProcess allows all messages in allowed channel', async () => {
+  process.env.ALLOWED_CHANNEL_IDS = 'allowed-chan-789';
+  const gkA = await import('../src/gatekeeper.js?allowed1=1');
+  const ctx = makeCtx({
+    isGroup: true,
+    channelId: 'allowed-chan-789',
+    senderId: 'user123456',
+    message: {
+      content: 'ceritakan jokes',
+      author: { id: 'user123456' },
+      client: { user: { id: 'ara-bot-id' } },
+      mentions: { has: () => false, repliedUser: null },
+    },
+  });
+  assert.strictEqual(await gkA.shouldProcess('ceritakan jokes', ctx), true);
+  gkA.stopSweeper();
+});
+
+test('shouldProcess rejects "arah/arab/arak/aray" in non-allowed channel (no mention)', async () => {
   const ctx = makeCtx({
     isGroup: true,
     channelId: 'guild-channel-123',
@@ -148,6 +189,7 @@ test('shouldProcess rejects false prefix "arah/arab/arak/aray" in group', async 
       content: 'arah ke mana',
       author: { id: 'user123456' },
       client: { user: { id: 'ara-bot-id' } },
+      mentions: { has: () => false, repliedUser: null },
     },
   });
   assert.strictEqual(await gk.shouldProcess('arah ke mana', ctx), false);
@@ -165,23 +207,10 @@ test('shouldProcess allows bot mention with extra text in group', async () => {
       content: '<@ara-bot-id> apa kabar?',
       author: { id: 'user123456' },
       client: { user: { id: 'ara-bot-id' } },
+      mentions: { has: (id) => id === 'ara-bot-id', repliedUser: null },
     },
   });
   assert.strictEqual(await gk.shouldProcess('<@ara-bot-id> apa kabar?', ctx), true);
-});
-
-test('shouldProcess allows just "ara" in group', async () => {
-  const ctx = makeCtx({
-    isGroup: true,
-    channelId: 'guild-channel-123',
-    senderId: 'user123456',
-    message: {
-      content: 'Ara',
-      author: { id: 'user123456' },
-      client: { user: { id: 'ara-bot-id' } },
-    },
-  });
-  assert.strictEqual(await gk.shouldProcess('Ara', ctx), true);
 });
 
 // ───────────────────────── shouldProcess — badword ─────────────────────────
@@ -226,7 +255,7 @@ test('shouldProcess enforces whitelist (listed only)', async () => {
 test('loadBlacklist reads from Redis', async () => {
   delete process.env.BLACKLIST;
   delete process.env.WHITELIST;
-  delete process.env.OWNER_NUMBER;
+  delete process.env.OWNER_DISCORD_ID;
   const fakeRedis = {
     get: async (key) => {
       assert.strictEqual(key, 'waifu:settings:misc');
@@ -245,7 +274,7 @@ test('loadBlacklist reads from Redis', async () => {
 test('setBlacklist updates in-memory list', async () => {
   delete process.env.BLACKLIST;
   delete process.env.WHITELIST;
-  delete process.env.OWNER_NUMBER;
+  delete process.env.OWNER_DISCORD_ID;
   const p = await import('../src/gatekeeper.js?sblgk=1');
   p.setBlacklist(['111', '222']);
   const blocked = makeCtx({ senderId: '111' });

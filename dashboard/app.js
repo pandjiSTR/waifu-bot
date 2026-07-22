@@ -659,8 +659,10 @@ async function fetchContacts() {
 
 async function fetchChatContext(number) {
   if (!number) return;
+  const contact = (state._contacts || []).find(c => c.number === number);
+  const isGroup = contact?.isGroup ? 'true' : 'false';
   const [data, memoryData] = await Promise.all([
-    api('/chat/context?number=' + encodeURIComponent(number)),
+    api('/chat/context?number=' + encodeURIComponent(number) + '&isGroup=' + isGroup),
     fetchFriendMemory(number)
   ]);
   renderChatContext(data, number);

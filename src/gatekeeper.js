@@ -2,10 +2,10 @@ import pino from 'pino';
 import { detectBadword } from './badwords.js';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
-const PREFIX = process.env.COMMAND_PREFIX || '!ara';
 
 let blacklist = [];
 const WHITELIST = (process.env.WHITELIST || '').split(',').map(s => s.trim()).filter(Boolean);
+const ALLOWED_CHANNEL_IDS = (process.env.ALLOWED_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 
 const seen = new Map();
 const SEEN_TTL_MS = 60 * 1000;
@@ -58,19 +58,25 @@ export async function shouldProcess(body, ctx) {
   if (blacklist.includes(senderNorm)) return false;
   if (WHITELIST.length && !WHITELIST.includes(senderNorm)) return false;
 
+  // DM: always respond
   if (!ctx.isGroup) {
     if (detectBadword(body)) ctx.badword = true;
     return true;
   }
 
-  const content = body.toLowerCase();
-  const prefix = PREFIX.toLowerCase();
-  const botMention = `<@${ctx.message?.client?.user?.id}>`;
-  const hasPrefix = content.startsWith(prefix);
-  const hasMention = body.includes(botMention);
-  const hasAraPrefix = /\bara\b/i.test(content);
+  // Allowed channel: respond freely to all messages
+  if (ALLOWED_CHANNEL_IDS.includes(ctx.channelId)) {
+    if (detectBadword(body)) ctx.badword = true;
+    return true;
+  }
 
-  if (!hasPrefix && !hasMention && !hasAraPrefix) return false;
+  // Non-allowed channel: only if bot is mentioned, reply to bot, or name called (ara/araa/araaa...)
+  const clientId = ctx.message?.client?.user?.id;
+  const isMentioned = clientId && ctx.message?.mentions?.has(clientId);
+  const isReplyToBot = clientId && ctx.message?.mentions?.repliedUser?.id === clientId;
+  const isNameCalled = /\bara+\b/i.test(body);
+
+  if (!isMentioned && !isReplyToBot && !isNameCalled) return false;
 
   if (detectBadword(body)) ctx.badword = true;
 

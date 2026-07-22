@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { normalizeNumber, getOwnerNumbers } from './util.js';
+
 import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
 import { addMessage, getWindow, summarizeContext, replaceLastMessage } from './context.js';
@@ -118,11 +118,7 @@ export async function processLLM(body, ctx) {
 
 
   // Persist the user's message FIRST so the next turn includes it.
-  // (Groups are already persisted in baileys.js before shouldProcess, so we
-  // skip the duplicate write here for groups.)
-  const persistPromise = isGroup
-    ? Promise.resolve()
-    : addMessage(ctx.redis, userId, { sender: ctx.senderId, text: body, timestamp: new Date().toISOString() }, isGroup);
+  const persistPromise = addMessage(ctx.redis, userId, { sender: ctx.senderId, text: body, timestamp: new Date().toISOString() }, isGroup);
 
   // Fase 6 (§5.6): start media extraction for image/PDF in parallel with
   // context loading — both are independent and the user doesn't need to wait
@@ -155,13 +151,13 @@ export async function processLLM(body, ctx) {
   ]);
   const mediaContext = await mediaPromise;
 
-  // Resolve display names for context clarity (group-awareness). Falls back
-  // to raw JIDs when redis is unavailable or names aren't populated.
+  // Resolve display names for context clarity. Falls back
+  // to raw IDs when redis is unavailable or names aren't populated.
   let nameMap = {};
   if (ctx.redis && typeof ctx.redis.hgetall === 'function') {
     try { nameMap = await ctx.redis.hgetall('waifu:friends:names') || {}; } catch { /* ignore */ }
   }
-  const resolveName = (jid) => (nameMap && nameMap[jid]) || jid;
+  const resolveName = (id) => (nameMap && nameMap[id]) || id;
 
   // Cross-reply laugh control: if Ara already laughed in her recent messages,
   // suppress laughs in this reply too (max 0). Otherwise allow at most one.

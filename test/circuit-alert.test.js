@@ -1,10 +1,9 @@
 // Tests for the owner-alert behavior of the circuit breaker (PRD §6.3 / §6.5).
-// Fully offline: ctx.llm.chat throws, ctx.redis is a fake, ctx.sock.sendMessage
-// is a mock. No real WhatsApp / Redis / Ollama.
+// Fully offline: ctx.llm.chat throws, ctx.redis is a fake. No real Discord / Redis / Ollama.
 import { test } from 'node:test';
 import assert from 'node:assert';
 
-// Must be set BEFORE importing pipeline (OWNER_NUMBERS is computed at load).
+// Must be set BEFORE importing pipeline (OWNER_DISCORD_ID is read at module level).
 process.env.OWNER_DISCORD_ID = '12345678901234567';
 
 const ALERT_KEY = 'waifu:last_alert';

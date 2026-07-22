@@ -51,7 +51,7 @@ async function getRaw(redis, userId, isGroup) {
 /**
  * Append a message to the sliding window for a chat.
  * @param {object|null} redis  // raw ioredis client or null (from createRedisClient)
- * @param {string} userId      // JID (private sender or group)
+ * @param {string} userId      // Discord channel or user ID
  * @param {{sender:string, text:string, timestamp?:string}} msg
  * @param {boolean} [isGroup=false]
  * @returns {Promise<void>}

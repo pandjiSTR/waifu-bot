@@ -9,10 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 
-// Owner number must be set BEFORE importing pipeline (it reads
-// OWNER_NUMBER at module load to build the owner-number list).
-process.env.OWNER_NUMBER = '167285352321048';
-process.env.OWNER_NAME = 'Panji';
+process.env.OWNER_DISCORD_ID = '167285352321048';
+process.env.OWNER_NAME = 'Bakwan';
 
 const PERSONA = readFileSync(new URL('../personality.txt', import.meta.url), 'utf-8');
 
@@ -94,7 +92,7 @@ const systemPromptOf = (msgs) => msgs[0].content;
 const lastUserOf = (msgs) => [...msgs].reverse().find((m) => m.role === 'user');
 
 // ── Scenario 1: owner asks about love ────────────────────────────────────────
-test('scenario: owner asks "masi sayang gak" — warm, identifies as Panji/pacar, openness in prompt', async () => {
+test('scenario: owner asks "masi sayang gak" — warm, identifies as Bakwan/pacar, openness in prompt', async () => {
   const ctx = baseCtx();
   let lastMsgs = null;
   ctx.llm.chat = async (msgs) => {
@@ -105,7 +103,7 @@ test('scenario: owner asks "masi sayang gak" — warm, identifies as Panji/pacar
   await pipeline.processLLM('masi sayang gak', ctx);
 
   const sys = systemPromptOf(lastMsgs);
-  assert.match(sys, /Panji/, 'owner name should be substituted into the prompt');
+  assert.match(sys, /Bakwan/, 'owner name should be substituted into the prompt');
   assert.match(sys, /pacarnya/, 'relationship to owner should be present');
   assert.match(sys, /nolak permintaan/, 'no-refuse directive should be present');
   assert.match(sys, /20 tahun berpendidikan/, 'human-morality clause should be present');

@@ -11,7 +11,7 @@ import pino from 'pino';
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
 /**
- * Resolve a display name for a WhatsApp id from the Redis name hashes.
+ * Resolve a display name from the Redis name hashes.
  * Falls back to the raw id when no name is stored or Redis is unavailable.
  */
 async function resolveName(redis, id, isGroup = false) {
@@ -394,7 +394,8 @@ export async function handleGetContext(req, res) {
 
     let context = [];
     if (number) {
-      const isGroup = number.includes('@g.us');
+      const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      const isGroup = urlObj.searchParams.get('isGroup') === 'true';
       const storeKey = isGroup ? `waifu:grup:${number}` : `waifu:ctx:${number}`;
       const raw = await req.redis.lrange(storeKey, 0, 49);
       context = raw.map(s => { try { return JSON.parse(s); } catch { return { text: s }; } });

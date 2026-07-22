@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { normalizeNumber, getOwnerNumbers } from './util.js';
+import { getOwnerDiscordId } from './util.js';
 import { buildSystemPrompt } from './personality.js';
 import { chat } from './llm.js';
 import { getWindow, addMessage } from './context.js';
@@ -108,12 +108,12 @@ export async function maybeProactive(ctx) {
   // Guard 5: probability gate (~40 %)
   if (Math.random() > PROBABILITY) return;
 
-  const ownerDigits = getOwnerNumbers()[0];
-  if (!ownerDigits || !client) return;
+  const ownerId = getOwnerDiscordId();
+  if (!ownerId || !client) return;
 
   try {
     // Build recent context from the owner's private window.
-    const window = await getWindow(redis, ownerDigits, false);
+    const window = await getWindow(redis, ownerId, false);
     const recentContext = window
       .map((m) =>
         m.sender === '__summary__'
@@ -127,7 +127,7 @@ export async function maybeProactive(ctx) {
     // Task instruction (not persona voice — just the behavior prompt).
     const taskInstruction =
       'Kirim SATU pesan proaktif singkat kepada owner seolah Ara memulai obrolan. ' +
-      '1-3 kata, natural ala WA Indonesia, tanpa emoji. ' +
+      '1-3 kata, natural ala chat Indonesia, tanpa emoji. ' +
       'Jangan mulai dengan hai/halo. Jangan tanya soal skripsi/jurnal/tugas kuliah. ' +
       '1 kalimat aja.';
 
@@ -144,9 +144,9 @@ export async function maybeProactive(ctx) {
       const chunksFn = ctx.sendChunks || sendChunks;
       const normalized = guardLaughs(naturalizeReply(text));
       const client = ctx.client;
-      if (client && ownerDigits) {
+      if (client && ownerId) {
         try {
-          const user = await client.users.fetch(ownerDigits);
+          const user = await client.users.fetch(ownerId);
           const dmChannel = user.dmChannel || await user.createDM();
           await chunksFn(dmChannel, normalized);
         } catch (err) {
@@ -156,7 +156,7 @@ export async function maybeProactive(ctx) {
 
       // Save to context so Ara remembers sending this and next tick
       // generates a different message (not repeated).
-      await addMessage(redis, ownerDigits, {
+      await addMessage(redis, ownerId, {
         sender: 'ara',
         text: normalized,
         timestamp: new Date().toISOString(),
