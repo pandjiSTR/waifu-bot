@@ -6,7 +6,6 @@ import { getWindow, addMessage } from './context.js';
 import { isOpen } from './circuit.js';
 import { naturalizeReply, guardLaughs } from './naturalize.js';
 import { sendChunks } from './chunks.js';
-import { createTypingPulse } from './dispatch.js';
 
 const logger = pino({ name: 'autochat', level: process.env.LOG_LEVEL || 'warn' });
 
@@ -68,11 +67,11 @@ export async function setAutoChat(redis, enabled) {
  *  - Min gap (3 hours) not elapsed -> return
  *  - Probability gate (40 %) not passed -> return
  *
- * @param {{redis:object|null, sock:object|null, chat?:Function, sendChunks?:Function}} ctx
+ * @param {{redis:object|null, client:object|null, chat?:Function, sendChunks?:Function}} ctx
  * @returns {Promise<void>}
  */
 export async function maybeProactive(ctx) {
-  const { redis, sock } = ctx;
+  const { redis, client } = ctx;
 
   // Guard 1: auto-chat must be enabled
   if (!(await isAutoChatEnabled(redis))) return;
@@ -110,13 +109,11 @@ export async function maybeProactive(ctx) {
   if (Math.random() > PROBABILITY) return;
 
   const ownerDigits = getOwnerNumbers()[0];
-  if (!ownerDigits || !sock) return;
-
-  const ownerJid = ownerDigits + '@s.whatsapp.net';
+  if (!ownerDigits || !client) return;
 
   try {
     // Build recent context from the owner's private window.
-    const window = await getWindow(redis, ownerJid, false);
+    const window = await getWindow(redis, ownerDigits, false);
     const recentContext = window
       .map((m) =>
         m.sender === '__summary__'
@@ -146,16 +143,20 @@ export async function maybeProactive(ctx) {
     if (text) {
       const chunksFn = ctx.sendChunks || sendChunks;
       const normalized = guardLaughs(naturalizeReply(text));
-      const pulse = createTypingPulse((t) => sock?.sendPresenceUpdate?.(t, ownerJid).catch?.(() => {}));
-      try {
-        await chunksFn(sock, ownerJid, normalized);
-      } finally {
-        pulse.stop();
+      const client = ctx.client;
+      if (client && ownerDigits) {
+        try {
+          const user = await client.users.fetch(ownerDigits);
+          const dmChannel = user.dmChannel || await user.createDM();
+          await chunksFn(dmChannel, normalized);
+        } catch (err) {
+          logger.warn({ err }, 'failed to send auto-chat DM');
+        }
       }
 
       // Save to context so Ara remembers sending this and next tick
       // generates a different message (not repeated).
-      await addMessage(redis, ownerJid, {
+      await addMessage(redis, ownerDigits, {
         sender: 'ara',
         text: normalized,
         timestamp: new Date().toISOString(),
@@ -176,12 +177,12 @@ export async function maybeProactive(ctx) {
 /**
  * Start the auto-chat scheduler interval.
  *
- * @param {{redis:object|null, sock:object|null}} opts
+ * @param {{redis:object|null, client:object|null}} opts
  * @returns {{stop:() => void}}
  */
-export function startAutoChat({ redis, sock }) {
-  if (!sock) {
-    logger.warn('No WhatsApp socket — auto-chat scheduler not started');
+export function startAutoChat({ redis, client }) {
+  if (!client) {
+    logger.warn('No Discord client — auto-chat scheduler not started');
     return { stop: () => {} };
   }
 
@@ -201,7 +202,7 @@ export function startAutoChat({ redis, sock }) {
   }
 
   const timer = setInterval(() => {
-    maybeProactive({ redis, sock }).catch((err) =>
+    maybeProactive({ redis, client }).catch((err) =>
       logger.warn({ err }, 'auto-chat tick failed'),
     );
   }, AUTO_CHAT_INTERVAL_MS);

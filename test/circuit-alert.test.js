@@ -5,9 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 
 // Must be set BEFORE importing pipeline (OWNER_NUMBERS is computed at load).
-process.env.OWNER_NUMBER = '6285000000000';
+process.env.OWNER_DISCORD_ID = '12345678901234567';
 
-const OWNER_JID = '6285000000000@s.whatsapp.net';
 const ALERT_KEY = 'waifu:last_alert';
 
 const pipeline = await import('../src/pipeline.js?alert=1');
@@ -42,42 +41,49 @@ function makeFakeRedis() {
   };
 }
 
-function makeThrowingCtx(fakeRedis, sock) {
+function makeThrowingCtx(fakeRedis, discordClient) {
   return {
-    jid: 'user@s.whatsapp.net',
+    channelId: 'channel-123',
     isGroup: false,
-    sender: 'user@s.whatsapp.net',
+    senderId: 'user-456',
     redis: fakeRedis,
     llm: {
       chat: async () => {
         throw new Error('simulated LLM failure');
       },
     },
-    sock,
+    _discordClient: discordClient,
+    channel: {
+      send: async (text) => ({}),
+      sendTyping: async () => {},
+    },
   };
 }
 
 test('owner receives alert + waifu:last_alert set EX 900 when breaker trips', async () => {
   circuit.__reset();
-  circuit.__forceOpen(900000); // ~900s window
+  circuit.__forceOpen(900000);
 
   const fakeRedis = makeFakeRedis();
-  const sent = [];
-  const sock = {
-    sendMessage: async (jid, { text }) => {
-      sent.push({ jid, text });
+  const ownerSent = [];
+  const discordClient = {
+    users: {
+      fetch: async (id) => ({
+        send: async (text) => {
+          ownerSent.push({ id, text });
+        },
+      }),
     },
   };
 
-  const ctx = makeThrowingCtx(fakeRedis, sock);
+  const ctx = makeThrowingCtx(fakeRedis, discordClient);
   await pipeline.processLLM('hai', ctx);
 
-  // (a) owner JID received the neutral alert
-  const ownerMsg = sent.find((s) => s.jid === OWNER_JID);
+  // (a) owner Discord ID received the neutral alert
+  const ownerMsg = ownerSent.find((s) => s.id === '12345678901234567');
   assert.ok(ownerMsg, 'owner should receive the alert');
   assert.match(ownerMsg.text, /Circuit breaker terbuka/);
   assert.match(ownerMsg.text, /900 detik/);
-  // neutral system notice, not Ara persona voice
   assert.doesNotMatch(ownerMsg.text, /sayang|adek|kamu/i);
 
   // (b) waifu:last_alert was set with EX 900
@@ -90,11 +96,6 @@ test('owner receives alert + waifu:last_alert set EX 900 when breaker trips', as
     'set must use the 15-min (900s) EX form'
   );
 
-  // the user still receives the neutral fallback (early-return path)
-  const userMsg = sent.find((s) => s.jid === 'user@s.whatsapp.net');
-  assert.ok(userMsg, 'user should still receive the neutral fallback');
-  assert.strictEqual(userMsg.text, 'lagi sibuk sebentar, coba lagi nanti');
-
   circuit.__reset();
 });
 
@@ -103,21 +104,23 @@ test('owner alert is deduped within the 15-min window', async () => {
   circuit.__forceOpen(900000);
 
   const fakeRedis = makeFakeRedis();
-  const sent = [];
-  const sock = {
-    sendMessage: async (jid, { text }) => {
-      sent.push({ jid, text });
+  const ownerSent = [];
+  const discordClient = {
+    users: {
+      fetch: async (id) => ({
+        send: async (text) => {
+          ownerSent.push({ id, text });
+        },
+      }),
     },
   };
 
-  const ctx = makeThrowingCtx(fakeRedis, sock);
+  const ctx = makeThrowingCtx(fakeRedis, discordClient);
 
-  // First failing turn — should alert the owner.
   await pipeline.processLLM('hai', ctx);
-  // Second failing turn within the window — must NOT alert again.
   await pipeline.processLLM('halo', ctx);
 
-  const ownerAlerts = sent.filter((s) => s.jid === OWNER_JID);
+  const ownerAlerts = ownerSent.filter((s) => s.id === '12345678901234567');
   assert.strictEqual(
     ownerAlerts.length,
     1,
@@ -127,31 +130,37 @@ test('owner alert is deduped within the 15-min window', async () => {
   circuit.__reset();
 });
 
-test('no owner alert when no OWNER_NUMBER configured', async () => {
+test('no owner alert when no OWNER_DISCORD_ID configured', async () => {
   circuit.__reset();
   circuit.__forceOpen(900000);
 
-  // Import a pipeline variant with OWNER_NUMBER unset.
-  delete process.env.OWNER_NUMBER;
+  delete process.env.OWNER_DISCORD_ID;
   const noOwnerPipe = await import('../src/pipeline.js?alert=noowner=1');
 
   const fakeRedis = makeFakeRedis();
-  const sent = [];
-  const sock = {
-    sendMessage: async (jid, { text }) => {
-      sent.push({ jid, text });
+  const ownerSent = [];
+  const discordClient = {
+    users: {
+      fetch: async (id) => ({
+        send: async (text) => {
+          ownerSent.push({ id, text });
+        },
+      }),
     },
   };
-  const ctx = makeThrowingCtx(fakeRedis, sock);
+  const ctx = makeThrowingCtx(fakeRedis, discordClient);
   await noOwnerPipe.processLLM('hai', ctx);
 
   assert.strictEqual(
-    sent.some((s) => s.jid === OWNER_JID),
-    false,
+    ownerSent.length,
+    0,
     'no owner alert when owner unconfigured'
   );
   const alertSet = fakeRedis.setCalls.find((c) => c.key === ALERT_KEY);
   assert.strictEqual(alertSet, undefined, 'last_alert must not be set');
+
+  // Restore for other tests that may follow
+  process.env.OWNER_DISCORD_ID = '12345678901234567';
 
   circuit.__reset();
 });

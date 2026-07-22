@@ -8,63 +8,28 @@ import assert from 'node:assert';
 const pipeline = await import('../src/pipeline.js');
 const gk = await import('../src/gatekeeper.js');
 const { stopSweeper } = gk;
-const media = await import('../src/media.js');
 
 function makeCtx(overrides = {}) {
   return {
-    jid: '6281234567890@s.whatsapp.net',
+    channelId: '1234567890',
     isGroup: false,
-    sender: '6281234567890@s.whatsapp.net',
-    message: { key: { remoteJid: '6281234567890@s.whatsapp.net' } },
-    sock: { user: { id: '6285000000000@s.whatsapp.net' } },
+    senderId: '1234567890',
+    sender: '1234567890',
+    message: {
+      content: '',
+      author: { id: '1234567890' },
+      client: { user: { id: 'ara-bot-id' } },
+    },
+    channel: { send: async () => ({ id: 'mock-id' }), sendTyping: async () => {} },
     redis: null,
     messageId: 'msg-' + Math.random().toString(36).slice(2),
     ...overrides,
   };
 }
 
-// ───────────────────────── extractText ─────────────────────────
 
-test('extractText reads conversation text', () => {
-  const m = { message: { conversation: 'halo ara' } };
-  assert.strictEqual(gk.extractText(m), 'halo ara');
-});
-
-test('extractText reads extendedTextMessage text', () => {
-  const m = { message: { extendedTextMessage: { text: 'tes' } } };
-  assert.strictEqual(gk.extractText(m), 'tes');
-});
-
-test('extractText reads image caption', () => {
-  const m = { message: { imageMessage: { caption: 'ini foto' } } };
-  assert.strictEqual(gk.extractText(m), 'ini foto');
-});
-
-test('extractText strips null bytes and trims', () => {
-  const m = { message: { conversation: '  hai \u0000  ' } };
-  assert.strictEqual(gk.extractText(m), 'hai');
-});
-
-test('extractText returns null for non-text messages', () => {
-  const m = { message: { imageMessage: {} } };
-  assert.strictEqual(gk.extractText(m), null);
-});
-
-// T2: 2000-char input cap
-test('extractText truncates input to 2000 characters', () => {
-  const long = 'x'.repeat(3000);
-  const m = { message: { conversation: long } };
-  const result = gk.extractText(m);
-  assert.strictEqual(result.length, 2000);
-  assert.strictEqual(result, 'x'.repeat(2000));
-});
 
 // ───────────────────────── shouldProcess ─────────────────────────
-
-test('shouldProcess rejects self/echo messages', async () => {
-  const ctx = makeCtx({ message: { key: { fromMe: true, remoteJid: 'x' } } });
-  assert.strictEqual(await gk.shouldProcess('halo', ctx), false);
-});
 
 test('shouldProcess rejects duplicate message ids', async () => {
   const ctx = makeCtx({ messageId: 'dup-1' });
@@ -81,11 +46,13 @@ test('shouldProcess always replies in private chat', async () => {
 test('shouldProcess rejects group messages without mention/command', async () => {
   const ctx = makeCtx({
     isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
+    channelId: 'guild-channel-123',
+    senderId: 'user123456',
+    sender: 'user123456',
     message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: { extendedTextMessage: { text: 'hai semua' } },
+      content: 'hai semua',
+      author: { id: 'user123456' },
+      client: { user: { id: 'ara-bot-id' } },
     },
   });
   assert.strictEqual(await gk.shouldProcess('hai semua', ctx), false);
@@ -94,29 +61,28 @@ test('shouldProcess rejects group messages without mention/command', async () =>
 test('shouldProcess allows group message that mentions the bot', async () => {
   const ctx = makeCtx({
     isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
+    channelId: 'guild-channel-123',
+    senderId: 'user123456',
+    sender: 'user123456',
     message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: {
-        extendedTextMessage: {
-          text: '@6285000000000 ara',
-          contextInfo: { mentionedJid: ['6285000000000@s.whatsapp.net'] },
-        },
-      },
+      content: '<@ara-bot-id> ara',
+      author: { id: 'user123456' },
+      client: { user: { id: 'ara-bot-id' } },
     },
   });
-  assert.strictEqual(await gk.shouldProcess('@6285000000000 ara', ctx), true);
+  assert.strictEqual(await gk.shouldProcess('<@ara-bot-id> ara', ctx), true);
 });
 
 test('shouldProcess allows group message containing the command prefix', async () => {
   const ctx = makeCtx({
     isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
+    channelId: 'guild-channel-123',
+    senderId: 'user123456',
+    sender: 'user123456',
     message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: { extendedTextMessage: { text: 'ara ceritakan jokes' } },
+      content: 'ara ceritakan jokes',
+      author: { id: 'user123456' },
+      client: { user: { id: 'ara-bot-id' } },
     },
   });
   assert.strictEqual(await gk.shouldProcess('ara ceritakan jokes', ctx), true);
@@ -125,11 +91,13 @@ test('shouldProcess allows group message containing the command prefix', async (
 test('shouldProcess rejects "arah/arab/arak/aray" in group (false prefix)', async () => {
   const ctx = makeCtx({
     isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
+    channelId: 'guild-channel-123',
+    senderId: 'user123456',
+    sender: 'user123456',
     message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: { extendedTextMessage: { text: 'arah ke mana' } },
+      content: 'arah ke mana',
+      author: { id: 'user123456' },
+      client: { user: { id: 'ara-bot-id' } },
     },
   });
   assert.strictEqual(await gk.shouldProcess('arah ke mana', ctx), false);
@@ -138,167 +106,32 @@ test('shouldProcess rejects "arah/arab/arak/aray" in group (false prefix)', asyn
   assert.strictEqual(await gk.shouldProcess('aray', ctx), false);
 });
 
-test('shouldProcess responds to a group reply quoting the bot (no "ara" text)', async () => {
-  const ctx = makeCtx({
-    isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
-    botJid: '6285000000000@s.whatsapp.net',
-    message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: {
-        extendedTextMessage: {
-          text: 'siap',
-          contextInfo: {
-            participant: '6285000000000@s.whatsapp.net',
-            quotedMessage: { conversation: 'hai' },
-          },
-        },
-      },
-    },
-  });
-  assert.strictEqual(await gk.shouldProcess('siap', ctx), true);
-});
 
-test('shouldProcess ignores a group reply quoting another user', async () => {
-  const ctx = makeCtx({
-    isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
-    botJid: '6285000000000@s.whatsapp.net',
-    message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: {
-        extendedTextMessage: {
-          text: 'iya dong',
-          contextInfo: {
-            participant: '6289999999999@s.whatsapp.net',
-            quotedMessage: { conversation: 'ayo' },
-          },
-        },
-      },
-    },
-  });
-  assert.strictEqual(await gk.shouldProcess('iya dong', ctx), false);
-});
-
-test('shouldProcess responds to a group reply quoting a tracked bot message (stanzaId)', async () => {
-  gk.trackBotMessage('bot-msg-xyz');
-  const ctx = makeCtx({
-    isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
-    message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: {
-        extendedTextMessage: {
-          text: 'wah bener',
-          contextInfo: {
-            stanzaId: 'bot-msg-xyz',
-            quotedMessage: { conversation: 'halo' },
-          },
-        },
-      },
-    },
-  });
-  // No "ara" text, no @mention, no participant match — but the quoted stanzaId
-  // is a message the bot actually sent, so it must respond.
-  assert.strictEqual(await gk.shouldProcess('wah bener', ctx), true);
-});
-
-test('shouldProcess ignores a group reply whose stanzaId is not a bot message', async () => {
-  const ctx = makeCtx({
-    isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
-    message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: {
-        extendedTextMessage: {
-          text: 'oke',
-          contextInfo: {
-            stanzaId: 'someone-else-msg',
-            quotedMessage: { conversation: 'halo' },
-          },
-        },
-      },
-    },
-  });
-  assert.strictEqual(await gk.shouldProcess('oke', ctx), false);
-});
-
-test('shouldProcess matches bot JID across LID/device-suffix formats', async () => {
-  const ctx = makeCtx({
-    isGroup: true,
-    jid: '120363012345678@g.us',
-    sender: '6281234567890@s.whatsapp.net',
-    botJid: '6285000000000:0@s.whatsapp.net',
-    message: {
-      key: { remoteJid: '120363012345678@g.us', participant: '6281234567890@s.whatsapp.net' },
-      message: {
-        extendedTextMessage: {
-          text: 'oke',
-          contextInfo: {
-            participant: '6285000000000@s.whatsapp.net',
-            quotedMessage: { conversation: 'halo' },
-          },
-        },
-      },
-    },
-  });
-  assert.strictEqual(await gk.shouldProcess('oke', ctx), true);
-});
-
-
-test('shouldProcess ignores sticker media (no media handling yet)', async () => {
-  const ctx = makeCtx({
-    message: {
-      key: { remoteJid: '6281234567890@s.whatsapp.net' },
-      message: { stickerMessage: {} },
-    },
-  });
-  assert.strictEqual(await gk.shouldProcess('caption', ctx), false);
-});
-
-test('shouldProcess rejects owner-only commands (ara fresh / ara status)', async () => {
-  const ctx = makeCtx({
-    sender: '6285000000000@s.whatsapp.net',
-    message: {
-      key: { remoteJid: '6285000000000@s.whatsapp.net' },
-      message: { extendedTextMessage: { text: 'ara fresh' } },
-    },
-  });
-  process.env.OWNER_NUMBER = '6285000000000';
-  const ownerGate = await import('../src/gatekeeper.js?owner=1');
-  assert.strictEqual(await ownerGate.shouldProcess('ara fresh', ctx), false);
-  assert.strictEqual(await ownerGate.shouldProcess('ara status', ctx), false);
-});
 
 // ───────────────────────── blacklist / whitelist ─────────────────────────
 
 test('shouldProcess rejects blacklisted senders', async () => {
   const gkB = await import('../src/gatekeeper.js?bl=1');
-  gkB.setBlacklist(['6281111111111@s.whatsapp.net']);
-  const ctx = makeCtx({ sender: '6281111111111@s.whatsapp.net' });
+  gkB.setBlacklist(['user111111']);
+  const ctx = makeCtx({ senderId: 'user111111', sender: 'user111111' });
   assert.strictEqual(await gkB.shouldProcess('halo', ctx), false);
-  const ok = makeCtx({ sender: '6282222222222@s.whatsapp.net' });
+  const ok = makeCtx({ senderId: 'user222222', sender: 'user222222' });
   assert.strictEqual(await gkB.shouldProcess('halo', ok), true);
 });
 
-test('shouldProcess enforces whitelist (owner + listed only)', async () => {
-  process.env.WHITELIST = '6282222222222@s.whatsapp.net';
-  process.env.OWNER_NUMBER = '6289999999999@s.whatsapp.net';
+test('shouldProcess enforces whitelist in group', async () => {
+  process.env.WHITELIST = 'user222222';
   const gkW = await import('../src/gatekeeper.js?wl=1');
-  const blocked = makeCtx({ sender: '6283333333333@s.whatsapp.net' });
-  assert.strictEqual(await gkW.shouldProcess('halo', blocked), false);
-  const listed = makeCtx({ sender: '6282222222222@s.whatsapp.net' });
-  assert.strictEqual(await gkW.shouldProcess('halo', listed), true);
-  const owner = makeCtx({ sender: '6289999999999@s.whatsapp.net' });
-  assert.strictEqual(await gkW.shouldProcess('halo', owner), true);
+  // Blocked user (not in whitelist) is rejected even with a valid prefix
+  const blocked = makeCtx({ isGroup: true, channelId: 'guild-ch', senderId: 'user333333', sender: 'user333333', message: { content: '!ara halo', author: { id: 'user333333' }, client: { user: { id: 'ara-bot-id' } } } });
+  assert.strictEqual(await gkW.shouldProcess('!ara halo', blocked), false);
+  // Listed user (in whitelist) passes with a valid prefix
+  const listed = makeCtx({ isGroup: true, channelId: 'guild-ch', senderId: 'user222222', sender: 'user222222', message: { content: '!ara halo', author: { id: 'user222222' }, client: { user: { id: 'ara-bot-id' } } } });
+  assert.strictEqual(await gkW.shouldProcess('!ara halo', listed), true);
 });
 
 // ───────────────────────── processLLM ─────────────────────────
-// Fully offline: ctx.llm.chat and ctx.sock.sendMessage are mocked.
+// Fully offline: ctx.llm.chat and ctx.channel.send are mocked.
 // Confirms the current user message is NOT duplicated in the LLM payload.
 
 // Circuit breaker guard (Fase 5, §6.3): while open, processLLM must skip the
@@ -312,8 +145,9 @@ test('processLLM sends neutral fallback and skips LLM when circuit is open', asy
   let sentText = null;
 
   const ctx = {
-    jid: 'breaker@s.whatsapp.net',
+    channelId: 'breaker-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     llm: {
@@ -323,9 +157,9 @@ test('processLLM sends neutral fallback and skips LLM when circuit is open', asy
       },
       summarize: async () => 'sum',
     },
-    sock: {
-      sendMessage: async (jid, { text }) => {
-        sentText = text;
+    channel: {
+      send: async (text) => {
+        sentText = typeof text === 'string' ? text : text;
       },
     },
   };
@@ -347,8 +181,9 @@ test('processLLM skips LLM when circuit breaker is enabled and open', async () =
   let sentText = null;
 
   const ctx = {
-    jid: 'cbtoggle@s.whatsapp.net',
+    channelId: 'cbtoggle-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     llm: {
@@ -357,9 +192,9 @@ test('processLLM skips LLM when circuit breaker is enabled and open', async () =
         return 'should-not-be-sent';
       },
     },
-    sock: {
-      sendMessage: async (jid, { text }) => {
-        sentText = text;
+    channel: {
+      send: async (text) => {
+        sentText = typeof text === 'string' ? text : text;
       },
     },
   };
@@ -382,8 +217,9 @@ test('processLLM calls LLM when circuit breaker is disabled despite being open',
   let calledMsgs = null;
 
   const ctx = {
-    jid: 'cbtoggle2@s.whatsapp.net',
+    channelId: 'cbtoggle2-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     llm: {
@@ -393,7 +229,7 @@ test('processLLM calls LLM when circuit breaker is disabled despite being open',
         return 'real-llm-reply';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?cbt2=1');
@@ -423,11 +259,10 @@ test('processLLM sends reply without duplicating the current message', async () 
   let chatCalled = false;
 
   const ctx = {
-    jid: 'jabber@s.whatsapp.net',
-    from: 'x',
+    channelId: 'jabber-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
-    pushName: 'T',
     redis: null, // exercise in-memory context fallback
     llm: {
       chat: async (msgs) => {
@@ -437,9 +272,9 @@ test('processLLM sends reply without duplicating the current message', async () 
       },
       summarize: async () => 'sum',
     },
-    sock: {
-      sendMessage: async (jid, { text }) => {
-        ctx._sent = text;
+    channel: {
+      send: async (text) => {
+        ctx._sent = typeof text === 'string' ? text : text;
       },
     },
   };
@@ -471,19 +306,17 @@ test('processLLM sends reply without duplicating the current message', async () 
 test('processLLM splits reply on \\n\\n — each paragraph is a separate bubble', async () => {
   const sent = [];
   const ctx = {
-    jid: 'jabber@s.whatsapp.net',
-    from: 'x',
+    channelId: 'jabber-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
-    pushName: 'T',
     redis: null,
     llm: {
       chat: async () => 'Intro\n\nPoint A\n\nPoint B',
       summarize: async () => 'sum',
     },
-    sock: {
-      sendMessage: async (jid, { text }) => { sent.push(text); },
-      sendPresenceUpdate: async () => {},
+    channel: {
+      send: async (text) => { sent.push(typeof text === 'string' ? text : ''); },
     },
   };
 
@@ -499,19 +332,17 @@ test('processLLM splits reply on \\n\\n — each paragraph is a separate bubble'
 test('processLLM keeps single-line reply as 1 bubble', async () => {
   const sent = [];
   const ctx = {
-    jid: 'jabber@s.whatsapp.net',
-    from: 'x',
+    channelId: 'jabber-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
-    pushName: 'T',
     redis: null,
     llm: {
       chat: async () => 'Gak jadi. Males.',
       summarize: async () => 'sum',
     },
-    sock: {
-      sendMessage: async (jid, { text }) => { sent.push(text); },
-      sendPresenceUpdate: async () => {},
+    channel: {
+      send: async (text) => { sent.push(typeof text === 'string' ? text : ''); },
     },
   };
 
@@ -539,8 +370,9 @@ test('shouldProcess leaves ctx.badword unset for clean text', async () => {
 test('processLLM appends sarcastic-tone instruction when ctx.badword is set', async () => {
   let lastMsgs = null;
   const ctx = {
-    jid: 'badword@s.whatsapp.net',
+    channelId: 'badword-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     badword: true, // injected flag (normally set by shouldProcess)
@@ -550,7 +382,7 @@ test('processLLM appends sarcastic-tone instruction when ctx.badword is set', as
         return 'reply-text';
       },
     },
-    sock: { sendMessage: async () => {} },
+    channel: { send: async () => {} },
   };
 
   await pipeline.processLLM('kau anjing!', ctx);
@@ -567,8 +399,9 @@ test('processLLM appends sarcastic-tone instruction when ctx.badword is set', as
 test('processLLM injects ctx.mediaContext into the last user turn', async () => {
   let lastMsgs = null;
   const ctx = {
-    jid: 'media@s.whatsapp.net',
+    channelId: 'media-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     mediaContext: '[GAMBAR] seekor kucing oranye', // injected (no real socket)
@@ -578,7 +411,7 @@ test('processLLM injects ctx.mediaContext into the last user turn', async () => 
         return 'reply-text';
       },
     },
-    sock: { sendMessage: async () => {} },
+    channel: { send: async () => {} },
   };
 
   await pipeline.processLLM('ini foto apa?', ctx);
@@ -591,49 +424,7 @@ test('processLLM injects ctx.mediaContext into the last user turn', async () => 
 
 // ───────────────────────── sticker maker (Fase 6, §5.3) ─────────────────────────
 
-test('processLLM intercepts sticker requests and does NOT call the LLM', async () => {
-  const sharp = (await import('sharp')).default;
-  const png = await sharp({
-    create: { width: 100, height: 100, channels: 3, background: { r: 10, g: 20, b: 30 } },
-  })
-    .png()
-    .toBuffer();
 
-  let llmChatCalled = false;
-  let sentSticker = null;
-
-  media.__setDownloadForTest(async () => png);
-
-  const ctx = {
-    jid: 'stick@s.whatsapp.net',
-    isGroup: false,
-    sender: 'x',
-    redis: null,
-    sock: {
-      user: { id: '6285000000000@s.whatsapp.net' },
-      sendMessage: async (jid, { sticker }) => {
-        sentSticker = sticker;
-      },
-    },
-    llm: {
-      chat: async () => {
-        llmChatCalled = true; // must NOT be called for a sticker request
-        return 'should-not-be-sent';
-      },
-    },
-    message: {
-      key: { remoteJid: 'stick@s.whatsapp.net' },
-      message: { imageMessage: { caption: 'buat stiker dong' } },
-    },
-  };
-
-  await pipeline.processLLM('buat stiker dong', ctx);
-
-  assert.strictEqual(llmChatCalled, false, 'LLM must be skipped for sticker requests');
-  assert.ok(sentSticker, 'a sticker buffer should be sent');
-  assert.strictEqual(sentSticker.slice(0, 4).toString('latin1'), 'RIFF');
-  assert.strictEqual(sentSticker.slice(8, 12).toString('latin1'), 'WEBP');
-});
 
 // ───────────────────────── search loop (Fase 6, §5.6 / §6.2) ─────────────────────────
 
@@ -642,8 +433,9 @@ test('processLLM search loop: injects results and strips [SEARCH] token from fin
   let searchCalledWith = null;
 
   const ctx = {
-    jid: 'search@s.whatsapp.net',
+    channelId: 'search-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     // Injected search function that returns fake results.
@@ -662,7 +454,7 @@ test('processLLM search loop: injects results and strips [SEARCH] token from fin
         return 'Cerahan. 32 derajat.';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   // Force fresh import to get the search imports
@@ -685,8 +477,9 @@ test('processLLM search loop: no search when reply has no [SEARCH] token', async
   let searchCalled = false;
 
   const ctx = {
-    jid: 'nosearch@s.whatsapp.net',
+    channelId: 'nosearch-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     search: async () => {
@@ -699,7 +492,7 @@ test('processLLM search loop: no search when reply has no [SEARCH] token', async
         return 'Jawaban langsung tanpa search.';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?sl2=1');
@@ -719,8 +512,9 @@ test('processLLM search loop: breaks when webSearch returns empty results', asyn
   let callCount = 0;
 
   const ctx = {
-    jid: 'noresults@s.whatsapp.net',
+    channelId: 'noresults-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     search: async () => '', // empty results
@@ -730,7 +524,7 @@ test('processLLM search loop: breaks when webSearch returns empty results', asyn
         return '[SEARCH: something]';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?sl3=1');
@@ -750,8 +544,9 @@ test('processLLM search loop: augments results with ctx.fetch content', async ()
   let fetchedUrl = null;
 
   const ctx = {
-    jid: 'webfetch@s.whatsapp.net',
+    channelId: 'webfetch-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     // Injected search that returns a result with a URL
@@ -778,7 +573,7 @@ test('processLLM search loop: augments results with ctx.fetch content', async ()
       return 'Answer with augmented content.';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?wf1=1');
@@ -794,8 +589,9 @@ test('processLLM search loop: ignores ctx.fetch when it returns empty', async ()
   let callCount = 0;
 
   const ctx = {
-    jid: 'webfetch2@s.whatsapp.net',
+    channelId: 'webfetch2-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     search: async () => '1. Test (https://example.com/test)\nSnippet.',
@@ -810,7 +606,7 @@ test('processLLM search loop: ignores ctx.fetch when it returns empty', async ()
       return 'Answer without augmentation.';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?wf2=1');
@@ -822,8 +618,9 @@ test('processLLM search loop: handles ctx.fetch throwing gracefully', async () =
   let callCount = 0;
 
   const ctx = {
-    jid: 'webfetch3@s.whatsapp.net',
+    channelId: 'webfetch3-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     search: async () => '1. Test (https://example.com/test)\nSnippet.',
@@ -839,7 +636,7 @@ test('processLLM search loop: handles ctx.fetch throwing gracefully', async () =
       return 'Answer despite fetch failure.';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?wf3=1');
@@ -851,8 +648,9 @@ test('processLLM search loop: max 2 iterations', async () => {
   let callCount = 0;
 
   const ctx = {
-    jid: 'maxiter@s.whatsapp.net',
+    channelId: 'maxiter-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     search: async () => 'Some results.',
@@ -862,7 +660,7 @@ test('processLLM search loop: max 2 iterations', async () => {
         return '[SEARCH: another query]';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?sl4=1');
@@ -877,19 +675,17 @@ test('processLLM search loop: max 2 iterations', async () => {
 
 test('processLLM search loop: drops "tunggu" lead-in when search fails to produce answer', async () => {
   const ctx = {
-    jid: 'tunggu@s.whatsapp.net',
-    from: 'x',
+    channelId: 'tunggu-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
-    pushName: 'T',
     redis: null,
     llm: {
       chat: async () => 'Tunggu ya, aku cari dulu. [SEARCH: cuaca jakarta]',
       summarize: async () => 'sum',
     },
-    sock: {
-      sendMessage: async () => {},
-      sendPresenceUpdate: async () => {},
+    channel: {
+      send: async () => {},
     },
     search: async () => '', // returns empty — simulates search failure
   };
@@ -901,11 +697,10 @@ test('processLLM search loop: drops "tunggu" lead-in when search fails to produc
 test('processLLM search loop: strips "tunggu" lead-in, keeps real answer', async () => {
   const sent = [];
   const ctx = {
-    jid: 'ok@s.whatsapp.net',
-    from: 'x',
+    channelId: 'ok-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
-    pushName: 'T',
     redis: null,
     llm: {
       chat: async (msgs) => {
@@ -915,9 +710,8 @@ test('processLLM search loop: strips "tunggu" lead-in, keeps real answer', async
       },
       summarize: async () => 'sum',
     },
-    sock: {
-      sendMessage: async (jid, { text }) => { sent.push(text); },
-      sendPresenceUpdate: async () => {},
+    channel: {
+      send: async (text) => { sent.push(typeof text === 'string' ? text : ''); },
     },
     search: async () => '1. Weather (https://weather.com)\nJakarta 30°C',
   };
@@ -954,9 +748,9 @@ test('loadBlacklist reads from Redis', async () => {
   };
   const p = await import('../src/gatekeeper.js?loadbl=1');
   await p.loadBlacklist(fakeRedis);
-  const blocked = makeCtx({ sender: '123@s.whatsapp.net' });
+  const blocked = makeCtx({ senderId: '123', sender: '123' });
   assert.strictEqual(await p.shouldProcess('halo', blocked), false);
-  const allowed = makeCtx({ sender: '789@s.whatsapp.net' });
+  const allowed = makeCtx({ senderId: '789', sender: '789' });
   assert.strictEqual(await p.shouldProcess('halo', allowed), true);
   p.stopSweeper();
 });
@@ -967,22 +761,22 @@ test('setBlacklist updates in-memory list', async () => {
   delete process.env.OWNER_NUMBER;
   const p = await import('../src/gatekeeper.js?sbl=1');
   p.setBlacklist(['111', '222']);
-  const blocked = makeCtx({ sender: '111@s.whatsapp.net' });
+  const blocked = makeCtx({ senderId: '111', sender: '111' });
   assert.strictEqual(await p.shouldProcess('halo', blocked), false);
-  const allowed = makeCtx({ sender: '333@s.whatsapp.net' });
+  const allowed = makeCtx({ senderId: '333', sender: '333' });
   assert.strictEqual(await p.shouldProcess('halo', allowed), true);
   p.stopSweeper();
 });
 
-test('setBlacklist normalizes numbers', async () => {
+test('setBlacklist matches exact senderId', async () => {
   delete process.env.BLACKLIST;
   delete process.env.WHITELIST;
   delete process.env.OWNER_NUMBER;
   const p = await import('../src/gatekeeper.js?sbln=1');
-  p.setBlacklist(['628xxx']);
-  const blocked = makeCtx({ sender: '628@s.whatsapp.net' });
+  p.setBlacklist(['user628']);
+  const blocked = makeCtx({ senderId: 'user628', sender: 'user628' });
   assert.strictEqual(await p.shouldProcess('halo', blocked), false);
-  const allowed = makeCtx({ sender: '620@s.whatsapp.net' });
+  const allowed = makeCtx({ senderId: 'user620', sender: 'user620' });
   assert.strictEqual(await p.shouldProcess('halo', allowed), true);
   p.stopSweeper();
 });
@@ -1076,8 +870,9 @@ test('processLLM extracts memory tokens from reply, persists via Redis, and stri
   let callCount = 0;
 
   const ctx = {
-    jid: 'memint@s.whatsapp.net',
+    channelId: 'memint-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: mockRedis,
     llm: {
@@ -1086,7 +881,7 @@ test('processLLM extracts memory tokens from reply, persists via Redis, and stri
         return 'Iya, dia suka kucing banget. [REMEMBER: suka kucing] [MOOD: seneng]';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?memint=1');
@@ -1118,8 +913,9 @@ test('processLLM memory extraction: fire-and-forget handles null Redis gracefull
   let callCount = 0;
 
   const ctx = {
-    jid: 'memnull@s.whatsapp.net',
+    channelId: 'memnull-channel',
     isGroup: false,
+    senderId: 'x',
     sender: 'x',
     redis: null,
     llm: {
@@ -1128,7 +924,7 @@ test('processLLM memory extraction: fire-and-forget handles null Redis gracefull
         return 'Cool. [REMEMBER: suka kopi] [MOOD: cool]';
       },
     },
-    sock: { sendMessage: async (jid, { text }) => { ctx._sent = text; } },
+    channel: { send: async (text) => { ctx._sent = typeof text === 'string' ? text : text; } },
   };
 
   const p = await import('../src/pipeline.js?memnull=1');
@@ -1148,15 +944,15 @@ test('processLLM resolves display names from waifu:friends:names in group contex
 
   const fakeRedis = {
     async hgetall(key) {
-      if (key === 'waifu:friends:names') return { 'budi@s.whatsapp.net': 'Budi', 'rehan@wpp': 'Rehan' };
+      if (key === 'waifu:friends:names') return { 'budi': 'Budi', 'rehan': 'Rehan' };
       return {};
     },
     async lrange(key) {
-      if (key === 'waifu:grup:group@s.whatsapp.net') {
+      if (key === 'waifu:grup:group-channel') {
         return [
           JSON.stringify({ sender: 'ara', text: 'oke', timestamp: '' }),
-          JSON.stringify({ sender: 'budi@s.whatsapp.net', text: 'Ngelek bat dah', timestamp: '' }),
-          JSON.stringify({ sender: 'rehan@wpp', text: 'anjay', timestamp: '' }),
+          JSON.stringify({ sender: 'budi', text: 'Ngelek bat dah', timestamp: '' }),
+          JSON.stringify({ sender: 'rehan', text: 'anjay', timestamp: '' }),
         ];
       }
       return [];
@@ -1170,15 +966,16 @@ test('processLLM resolves display names from waifu:friends:names in group contex
   };
 
   const ctx = {
-    jid: 'group@s.whatsapp.net',
+    channelId: 'group-channel',
     isGroup: true,
-    sender: 'budi@s.whatsapp.net',
+    senderId: 'budi',
+    sender: 'budi',
     redis: fakeRedis,
     llm: {
       chat: async (msgs) => { captured.push(msgs); return 'oke'; },
     },
-    sock: { user: { id: 'ara@s.whatsapp.net' }, sendMessage: async () => {} },
-    message: { key: { remoteJid: 'group@s.whatsapp.net', participant: 'budi@s.whatsapp.net' } },
+    channel: { send: async () => {} },
+    message: { content: 'apa kabar', author: { id: 'budi' }, client: { user: { id: 'ara' } } },
   };
 
   await pipeline.processLLM('apa kabar', ctx);

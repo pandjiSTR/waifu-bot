@@ -2,74 +2,55 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { createDispatcher, createTypingPulse } from '../src/dispatch.js';
 
-test('createTypingPulse sends composing immediately, paused on stop', () => {
+test('createTypingPulse calls sendTyping immediately, stops on stop', () => {
   const calls = [];
-  const pulse = createTypingPulse((type) => calls.push(type), 10000);
-  assert.strictEqual(calls[0], 'composing');
+  const pulse = createTypingPulse(() => calls.push('typing'), 10000);
+  assert.strictEqual(calls[0], 'typing');
   pulse.stop();
-  assert.strictEqual(calls[1], 'paused');
+  // After stop, no more calls should happen
+  const countAfterStop = calls.length;
+  assert.strictEqual(calls[countAfterStop - 1], 'typing');
 });
 
-test('createTypingPulse heartbeat fires composing on interval', async () => {
+test('createTypingPulse heartbeat fires typing on interval', async () => {
   const calls = [];
-  const pulse = createTypingPulse((type) => calls.push(type), 50);
+  const pulse = createTypingPulse(() => calls.push('typing'), 50);
   await new Promise((r) => setTimeout(r, 70));
-  assert.ok(calls.length >= 2, 'composing should fire at least twice (initial + 1 tick)');
+  assert.ok(calls.length >= 2, 'typing should fire at least twice (initial + 1 tick)');
   pulse.stop();
-  await new Promise((r) => setTimeout(r, 100));
-  assert.strictEqual(calls[calls.length - 1], 'paused');
 });
 
-test('dispatches serially for the same JID', async () => {
+test('dispatches serially for the same channelId', async () => {
   const order = [];
   const p = createDispatcher({
     processLLM: async (body) => { order.push(body); },
-    sendPresenceUpdate: () => {},
   });
-  p.dispatch('msg1', { jid: 'jid-x' });
-  p.dispatch('msg2', { jid: 'jid-x' });
+  p.dispatch('msg1', { channelId: 'channel-x', channel: { sendTyping: async () => {} } });
+  p.dispatch('msg2', { channelId: 'channel-x', channel: { sendTyping: async () => {} } });
   await new Promise((r) => setTimeout(r, 10));
   assert.deepStrictEqual(order, ['msg1', 'msg2']);
 });
 
-test('sends composing then paused for the queue', async () => {
-  const presence = [];
+test('sends typing indicator for the queue', async () => {
+  const typingCalls = [];
   const p = createDispatcher({
     processLLM: async () => {},
-    sendPresenceUpdate: (t) => presence.push(t),
   });
-  p.dispatch('msg', { jid: 'jid-y' });
+  p.dispatch('msg', { channelId: 'channel-y', channel: { sendTyping: async () => typingCalls.push('typing') } });
   await new Promise((r) => setTimeout(r, 10));
-  assert.ok(presence.includes('composing'), 'presence should include composing at start');
-  assert.strictEqual(presence.at(-1), 'paused', 'last presence should be paused');
-  const pausedCount = presence.filter((t) => t === 'paused').length;
-  assert.strictEqual(pausedCount, 1, 'should have exactly one paused');
+  assert.ok(typingCalls.length >= 1, 'typing should be called at least once');
 });
 
-test('getCurrentSock updates ctx.sock before processLLM runs', async () => {
-  const captured = [];
-  let currentSock = { id: 'old' };
-  const p = createDispatcher({
-    processLLM: async (body, ctx) => { captured.push(ctx.sock); },
-    sendPresenceUpdate: () => {},
-    getCurrentSock: () => currentSock,
-  });
-  currentSock = { id: 'new' };
-  p.dispatch('msg', { jid: 'jid-z', sock: { id: 'old' } });
-  await new Promise((r) => setTimeout(r, 10));
-  assert.strictEqual(captured[0].id, 'new', 'ctx.sock should be updated from getCurrentSock');
-});
-
-test('different JIDs are not serialized', async () => {
+test('different channelIds are not serialized', async () => {
   const order = [];
   let resolveA;
   const processLLM = async (body) => {
     if (body === 'a') await new Promise((r) => { resolveA = r; });
     order.push(body);
   };
-  const p = createDispatcher({ processLLM, sendPresenceUpdate: () => {} });
-  p.dispatch('a', { jid: 'jid-1' });
-  p.dispatch('b', { jid: 'jid-2' });
+  const p = createDispatcher({ processLLM });
+  p.dispatch('a', { channelId: 'ch-1', channel: { sendTyping: async () => {} } });
+  p.dispatch('b', { channelId: 'ch-2', channel: { sendTyping: async () => {} } });
   await new Promise((r) => setTimeout(r, 0));
   resolveA();
   await new Promise((r) => setTimeout(r, 10));

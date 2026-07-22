@@ -46,14 +46,14 @@ test('splitChunks hard-truncates a single word longer than maxChars', () => {
 
 // ───────────────────────── sendChunks (delivery) ─────────────────────────
 
-test('sendChunks sends each chunk in order via the socket', async () => {
+test('sendChunks sends each chunk in order via the channel', async () => {
   const sent = [];
-  const sock = {
-    sendMessage: async (jid, { text }) => {
+  const channel = {
+    send: async (text) => {
       sent.push(text);
     },
   };
-  const res = await sendChunks(sock, 'jid', 'hello world foo', {
+  const res = await sendChunks(channel, 'hello world foo', {
     maxChars: 5,
     delayMs: 0,
   });
@@ -63,22 +63,21 @@ test('sendChunks sends each chunk in order via the socket', async () => {
 
 test('sendChunks retries a failing chunk then succeeds', async () => {
   const calls = [];
-  const sock = {
-    sendMessage: async (jid, { text }) => {
+  const channel = {
+    send: async (text) => {
       calls.push(text);
-      // Fail the first attempt of the 'world' chunk only.
       if (calls.filter((c) => c === text).length === 1 && text === 'world') {
         throw new Error('transient');
       }
     },
   };
-  const res = await sendChunks(sock, 'jid', 'hello world foo', {
+  const res = await sendChunks(channel, 'hello world foo', {
     maxChars: 5,
     delayMs: 0,
     backoffBaseMs: 1,
   });
   assert.strictEqual(calls.filter((c) => c === 'hello').length, 1);
-  assert.strictEqual(calls.filter((c) => c === 'world').length, 2); // retried
+  assert.strictEqual(calls.filter((c) => c === 'world').length, 2);
   assert.strictEqual(calls.filter((c) => c === 'foo').length, 1);
   assert.strictEqual(res.sent, 3);
   assert.strictEqual(res.failed, false);
@@ -86,26 +85,25 @@ test('sendChunks retries a failing chunk then succeeds', async () => {
 
 test('sendChunks stops after a chunk exhausts retries and reports failure', async () => {
   const sent = [];
-  const sock = {
-    sendMessage: async (jid, { text }) => {
+  const channel = {
+    send: async (text) => {
       sent.push(text);
       throw new Error('always fails');
     },
   };
-  const res = await sendChunks(sock, 'jid', 'hello world foo', {
+  const res = await sendChunks(channel, 'hello world foo', {
     maxChars: 5,
     delayMs: 0,
     backoffBaseMs: 1,
     maxAttempts: 2,
   });
-  // Only the first chunk is attempted (twice), then sending stops.
   assert.strictEqual(sent.length, 2);
   assert.strictEqual(res.sent, 0);
   assert.strictEqual(res.failed, true);
 });
 
-test('sendChunks no-ops gracefully when sock has no sendMessage', async () => {
-  const res = await sendChunks(null, 'jid', 'hello world', { maxChars: 5 });
+test('sendChunks no-ops gracefully when channel is null', async () => {
+  const res = await sendChunks(null, 'hello world', { maxChars: 5 });
   assert.deepStrictEqual(res, { sent: 0, total: 2, failed: false, ids: [] });
 });
 

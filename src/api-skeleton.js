@@ -2,7 +2,7 @@ import { getPersonalityContent, savePersonality } from './personality.js';
 import { setBlacklist } from './gatekeeper.js';
 import { setCircuitBreakerEnabled } from './pipeline.js';
 import { scanAll } from './redis.js';
-import { getConnectionState } from './baileys.js';
+import { getConnectionState } from './discord.js';
 import { isAutoChatEnabled, setAutoChat } from './autochat.js';
 import { state as cbState, __reset } from './circuit.js';
 import { getFriendMemory, setMood, addFact, clearMemory } from './memory.js';
@@ -87,7 +87,7 @@ export async function handleHealth(req, res) {
     json(res, 200, {
       status: 'ok',
       uptime: Math.floor((Date.now() - START_TIME) / 1000),
-      waSocket: state,
+      discordStatus: state,
       sessionReady: state === 'connected',
     });
   } catch (err) {
@@ -635,32 +635,7 @@ export async function handleGetMessages(req, res) {
   }
 }
 
-// ──────────────────────────────────────────────
-// QR / Pairing endpoints
-// ──────────────────────────────────────────────
 
-/**
- * GET /api/auth/qr
- * Public (no auth) — returns the current QR code string for WhatsApp pairing,
- * or a 404 if no QR is available yet.
- */
-export async function handleGetQR(req, res) {
-  try {
-    if (!req.redis) {
-      json(res, 503, { error: 'Redis unavailable — cannot retrieve QR' });
-      return;
-    }
-    const qr = await req.redis.get('waifu:qr');
-    if (qr) {
-      json(res, 200, { qr, message: 'Scan this QR code with WhatsApp' });
-    } else {
-      json(res, 404, { qr: null, message: 'No QR code available yet — wait for connection' });
-    }
-  } catch (err) {
-    logger.error({ err }, 'Get QR handler error');
-    json(res, 500, { error: 'Internal server error' });
-  }
-}
 
 // ──────────────────────────────────────────────
 // Friend Memory endpoints
@@ -747,9 +722,6 @@ export async function handleClearFriendMemory(req, res) {
  */
 export function registerApiRoutes(router, requireAuth) {
   // Public routes (no auth)
-  // QR code endpoint (public — needed for pairing before auth)
-  router.get('/api/auth/qr', handleGetQR);
-
   router.get('/api/health', handleHealth);
 
   // Auth routes (handled separately in index.js but registered here for routing)

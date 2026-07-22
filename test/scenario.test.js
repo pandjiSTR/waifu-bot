@@ -9,9 +9,9 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 
-// Owner number + name must be set BEFORE importing pipeline (it reads
+// Owner number must be set BEFORE importing pipeline (it reads
 // OWNER_NUMBER at module load to build the owner-number list).
-process.env.OWNER_NUMBER = '6285176719006,167285352321048';
+process.env.OWNER_NUMBER = '167285352321048';
 process.env.OWNER_NAME = 'Panji';
 
 const PERSONA = readFileSync(new URL('../personality.txt', import.meta.url), 'utf-8');
@@ -70,13 +70,19 @@ function makeFakeRedis() {
 function baseCtx(overrides = {}) {
   const sent = [];
   const ctx = {
-    jid: '6285176719006@s.whatsapp.net',
+    channelId: '167285352321048',
     isGroup: false,
-    sender: '6285176719006@s.whatsapp.net',
+    senderId: '167285352321048',
+    sender: '167285352321048',
     redis: makeFakeRedis(),
-    message: { key: { remoteJid: '6285176719006@s.whatsapp.net' } },
+    message: {
+      content: '',
+      author: { id: '167285352321048' },
+      client: { user: { id: 'ara-bot-id' } },
+      attachments: { first: () => undefined },
+    },
     llm: { chat: async () => 'reply', summarize: async () => 'sum' },
-    sock: { sendMessage: async (_jid, { text }) => sent.push(text) },
+    channel: { send: async (text) => sent.push(text) },
     messageId: 'scn-' + Math.random().toString(36).slice(2),
     _sent: sent,
     ...overrides,

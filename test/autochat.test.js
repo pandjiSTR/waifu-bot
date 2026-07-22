@@ -91,16 +91,25 @@ test('maybeProactive sends a message when auto-chat is enabled', async () => {
   Math.random = () => 0; // always pass probability gate
 
   let sentText = null;
-  const fakeSock = {};
+  const mockClient = {
+    users: {
+      fetch: async () => ({
+        dmChannel: null,
+        createDM: async () => ({
+          send: async (text) => { sentText = text; },
+        }),
+      }),
+    },
+  };
 
   const mod = await import('../src/autochat.js?mp1=1');
 
   await mod.maybeProactive({
     redis,
-    sock: fakeSock,
+    client: mockClient,
     _testNow: new Date('2026-07-08T05:00:00Z'), // 12:00 WIB — within 08-22 window
     chat: async () => 'Halo beb',
-    sendChunks: async (sock, jid, text) => {
+    sendChunks: async (channel, text) => {
       sentText = text;
     },
   });
@@ -115,7 +124,7 @@ test('maybeProactive sends a message when auto-chat is enabled', async () => {
 
   // The auto-chat message should be saved to the owner's context so Ara
   // remembers sending it (prevents repeated messages and missing self-awareness).
-  const ctxKey = 'waifu:ctx:6285000000000@s.whatsapp.net';
+  const ctxKey = 'waifu:ctx:6285000000000';
   assert.ok(redis.lists[ctxKey], 'auto-chat message should be saved to context');
   const saved = JSON.parse(redis.lists[ctxKey][0]);
   assert.strictEqual(saved.sender, 'ara');
@@ -136,9 +145,9 @@ test('maybeProactive sends nothing when auto-chat is disabled', async () => {
 
   await mod.maybeProactive({
     redis,
-    sock: {},
+    client: null,
     chat: async () => 'should-not-be-called',
-    sendChunks: async (sock, jid, text) => {
+    sendChunks: async (channel, text) => {
       sentText = text;
     },
   });
@@ -163,9 +172,9 @@ test('maybeProactive sends nothing when circuit breaker is open', async () => {
 
   await mod.maybeProactive({
     redis,
-    sock: {},
+    client: null,
     chat: async () => 'should-not-be-called',
-    sendChunks: async (sock, jid, text) => {
+    sendChunks: async (channel, text) => {
       sentText = text;
     },
   });
@@ -195,9 +204,9 @@ test('maybeProactive sends nothing when no owner is configured', async () => {
 
   await mod.maybeProactive({
     redis,
-    sock: {},
+    client: null,
     chat: async () => 'should-not-be-called',
-    sendChunks: async (sock, jid, text) => {
+    sendChunks: async (channel, text) => {
       sentText = text;
     },
   });
@@ -215,10 +224,15 @@ test('startAutoChat returns a stop function', async () => {
   circuit.__reset();
 
   const redis = makeFakeRedis({ 'waifu:autochat:enabled': '1' });
+  const mockClient = {
+    users: {
+      fetch: async () => ({ dmChannel: null, createDM: async () => ({ send: async () => {} }) }),
+    },
+  };
 
   const mod = await import('../src/autochat.js?sa1=1');
 
-  const controller = mod.startAutoChat({ redis, sock: {} });
+  const controller = mod.startAutoChat({ redis, client: mockClient });
   assert.ok(controller, 'should return a controller object');
   assert.strictEqual(typeof controller.stop, 'function');
 
@@ -226,10 +240,10 @@ test('startAutoChat returns a stop function', async () => {
   controller.stop();
 });
 
-test('startAutoChat returns noop when sock is null', async () => {
+test('startAutoChat returns noop when client is null', async () => {
   const mod = await import('../src/autochat.js?sa2=1');
 
-  const controller = mod.startAutoChat({ redis: null, sock: null });
+  const controller = mod.startAutoChat({ redis: null, client: null });
   assert.ok(controller, 'should return a controller object');
   assert.strictEqual(typeof controller.stop, 'function');
 

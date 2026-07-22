@@ -7,11 +7,10 @@ import { sendChunks } from './chunks.js';
 import { naturalizeReply, guardLaughs, hasLaugh, stripTrailingLaugh } from './naturalize.js';
 import { isOpen, remainingMs, onTrip, onClose } from './circuit.js';
 import { detectBadword } from './badwords.js';
-import { describeImage, extractPdfText, getMediaBuffer } from './media.js';
-import { makeSticker } from './sticker.js';
+
 import { webSearch, webFetch, extractSearchQuery, stripSearchTokens } from './search.js';
 import { getFriendMemory, addFact, setMood } from './memory.js';
-import { extractText, shouldProcess, trackBotMessage, loadBlacklist, setBlacklist, stopSweeper, isStickerRequest } from './gatekeeper.js';
+import { extractText, shouldProcess, loadBlacklist, setBlacklist, stopSweeper } from './gatekeeper.js';
 
 // PRD §5.7: a detected badword must NOT block the message — it shifts the reply
 // tone to sarcastic. This is a TASK instruction (behavior), not persona voice
@@ -52,33 +51,25 @@ if (!registered) {
  * notice to the owner only. It is fully guarded so a failed alert can never
  * break the main message flow.
  *
- * @param {{jid:string, isGroup:boolean, sender:string, message:object, sock:object, redis:object|null}} ctx
+ * @param {{redis:object|null, _discordClient:object}} ctx
  */
 export async function maybeAlertOwner(ctx) {
-  const ownerDigits = getOwnerNumbers()[0];
-  if (!ownerDigits) return; // no owner configured -> no-op
-
-  const ownerJid = ownerDigits + '@s.whatsapp.net';
   const ALERT_KEY = 'waifu:last_alert';
-  const ALERT_TTL = 900; // 15 minutes
-
+  const ALERT_TTL = 900;
+  const ownerId = process.env.OWNER_DISCORD_ID;
+  if (!ownerId) return;
   try {
-    // Dedup: skip if an alert was already sent within the 15-min window.
     const alreadyAlerted = await ctx.redis?.get(ALERT_KEY);
     if (alreadyAlerted) return;
-
     const seconds = Math.ceil(remainingMs() / 1000);
-    const text =
-      `Circuit breaker terbuka — LLM sedang disuspensi ${seconds} detik.`;
-
-    await ctx.sock?.sendMessage(ownerJid, { text });
-
-    // Mark the window only after a successful send so a failed send does not
-    // silently suppress the next (needed) alert.
+    const text = `Circuit breaker terbuka — LLM sedang disuspensi ${seconds} detik.`;
+    const client = ctx._discordClient;
+    if (client) {
+      const user = await client.users.fetch(ownerId);
+      await user.send(text);
+    }
     await ctx.redis?.set(ALERT_KEY, '1', 'EX', ALERT_TTL);
-  } catch (err) {
-    logger.warn({ err }, 'owner alert failed (ignored)');
-  }
+  } catch (err) { logger.warn({ err }, 'owner alert failed (ignored)'); }
 }
 
 /**
@@ -116,55 +107,40 @@ export function stripMemoryTokens(text) {
 /**
  * Orchestrate one LLM reply turn and send it.
  * @param {string} body
- * @param {{jid:string, isGroup:boolean, sender:string, message:object, sock:object, redis:object|null}} ctx
+ * @param {{channelId:string, isGroup:boolean, senderId:string, message:object, channel:object, redis:object|null, _discordClient:object}} ctx
  * @returns {Promise<void>}
  */
 export async function processLLM(body, ctx) {
   const pStart = Date.now();
-  const userId = ctx.jid; // private: user JID; group: group JID
+  const userId = ctx.channelId;
   const isGroup = !!ctx.isGroup;
 
-  // Fase 6 (§5.3): sticker-maker interception. Image-as-sticker requests are
-  // handled here and must NOT reach the LLM or be persisted as conversation.
-  // Never throws — failures are logged and skipped.
-  if (isStickerRequest(ctx)) {
-    try {
-      const sticker = await makeSticker(ctx.sock, ctx.message);
-      if (sticker) {
-        await ctx.sock?.sendMessage(ctx.jid, { sticker });
-      } else {
-        logger.warn('makeSticker returned no buffer; skipping sticker send');
-      }
-    } catch (err) {
-      logger.warn({ err }, 'sticker generation failed (ignored)');
-    }
-    logger.info({ duration: Date.now() - pStart, action: 'sticker' }, 'Message processed');
-    return;
-  }
+
 
   // Persist the user's message FIRST so the next turn includes it.
   // (Groups are already persisted in baileys.js before shouldProcess, so we
   // skip the duplicate write here for groups.)
   const persistPromise = isGroup
     ? Promise.resolve()
-    : addMessage(ctx.redis, userId, { sender: ctx.sender, text: body, timestamp: new Date().toISOString() }, isGroup);
+    : addMessage(ctx.redis, userId, { sender: ctx.senderId, text: body, timestamp: new Date().toISOString() }, isGroup);
 
   // Fase 6 (§5.6): start media extraction for image/PDF in parallel with
   // context loading — both are independent and the user doesn't need to wait
   // for both sequentially. Falls back to ctx.mediaContext for test injection.
   const mediaPromise = (async () => {
     if (ctx.mediaContext) return ctx.mediaContext;
-    const msgNode = ctx.message?.message;
-    if (!msgNode) return null;
+    const attachment = ctx.message?.attachments?.first();
+    if (!attachment) return null;
     try {
-      if (msgNode.imageMessage) {
-        const desc = await describeImage(ctx.sock, ctx.message, body);
-        return desc ? `[GAMBAR] ${desc}` : null;
-      }
-      if (msgNode.documentMessage && msgNode.documentMessage.mimetype === 'application/pdf') {
-        const buf = await getMediaBuffer(ctx.sock, ctx.message);
-        const text = buf ? await extractPdfText(buf) : '';
-        return text ? `[PDF] ${text}` : null;
+      if (attachment.contentType?.startsWith('image/')) {
+        const resp = await fetch(attachment.url);
+        const buffer = Buffer.from(await resp.arrayBuffer());
+        const base64 = buffer.toString('base64');
+        const text = await chat([{
+          role: 'user',
+          content: 'Jelaskan isi gambar ini secara singkat dalam bahasa Indonesia.'
+        }], { images: [base64] });
+        return text?.trim() ? `[GAMBAR] ${text.trim()}` : null;
       }
     } catch (err) {
       logger.warn({ err }, 'media context extraction failed (ignored)');
@@ -175,7 +151,7 @@ export async function processLLM(body, ctx) {
   // Run message persist, context loading, and friend memory in parallel
   const [window, mem] = await Promise.all([
     persistPromise.then(() => getWindow(ctx.redis, userId, isGroup)),
-    getFriendMemory(ctx.redis, ctx.sender),
+    getFriendMemory(ctx.redis, ctx.senderId),
   ]);
   const mediaContext = await mediaPromise;
 
@@ -264,9 +240,7 @@ export async function processLLM(body, ctx) {
     ctx.redis?.lpush('waifu:logs', JSON.stringify({ time: new Date().toISOString(), level: 'warn', msg: 'Circuit breaker open — sending fallback' })).catch(() => {});
     // Notify the owner once per 15-min window (idempotent via Redis dedup).
     await maybeAlertOwner(ctx);
-    await sendChunks(ctx.sock, userId, CIRCUIT_FALLBACK, {
-      sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
-    }).then((d) => { if (d?.ids) d.ids.forEach(trackBotMessage); });
+    await sendChunks(ctx.channel, CIRCUIT_FALLBACK);
     logger.info({ duration: Date.now() - pStart, action: 'circuit_fallback' }, 'Message processed');
     return;
   }
@@ -401,10 +375,7 @@ export async function processLLM(body, ctx) {
     if (i > 0) {
       await new Promise((r) => setTimeout(r, 1500));
     }
-    const delivery = await sendChunks(ctx.sock, userId, segments[i], {
-      sendMessage: ctx.sock?.sendMessage?.bind(ctx.sock),
-    });
-    if (delivery.ids) delivery.ids.forEach(trackBotMessage);
+    const delivery = await sendChunks(ctx.channel, segments[i]);
     if (delivery.failed) {
       deliveryFailed = true;
       logger.warn({ delivery }, 'sendChunks failed for segment');
