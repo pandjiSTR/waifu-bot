@@ -1,6 +1,6 @@
 # Ara (waifu-bot)
 
-Personal WhatsApp AI Chatbot — Baileys + Ollama Cloud + Upstash Redis.
+Personal Discord AI Chatbot — discord.js + Ollama Cloud + Upstash Redis.
 
 ## Commands
 
@@ -16,7 +16,7 @@ Personal WhatsApp AI Chatbot — Baileys + Ollama Cloud + Upstash Redis.
 
 - **Single package** (not monorepo). Name in `package.json` is `waifu-bot`, runtime name is `Ara`.
 - **ESM only** — `import`/`export`, no CommonJS.
-- **Entrypoint**: `index.js` — creates HTTP server + inits WhatsApp.
+- **Entrypoint**: `index.js` — creates HTTP server + inits Discord.
 - **Core**: `src/*.js` — pipeline, LLM client, context, memory, gatekeeper, circuit breaker, etc.
 - **Dashboard**: `dashboard/` — static SPA (vanilla JS + Chart.js), built into `dashboard/out/` (gitignored). Run `npm run build` before serving.
 - **Personality**: `personality.txt` (gitignored) — single source of truth for bot persona. Template at `personality.txt.example`. `{OWNER_NAME}` placeholder substituted at runtime.
@@ -25,11 +25,11 @@ Personal WhatsApp AI Chatbot — Baileys + Ollama Cloud + Upstash Redis.
 ## Test quirks
 
 - **Framework**: Node.js `node:test` + `node:assert`. No Jest/Vitest.
-- **Env must be set before module import**: Several modules read env vars at import time (e.g. `OWNER_NUMBER` in pipeline tests). Tests set `process.env` before `await import(...)`.
+- **Env must be set before module import**: Several modules read env vars at import time (e.g. `OWNER_DISCORD_ID` in pipeline tests). Tests set `process.env` before `await import(...)`.
 - **Module-level import**: Tests use `await import(...)` at top level (ESM), not `require()`.
 - **`circuit.js` test seams**: `__forceOpen(ms)` and `__reset()` — not part of public API, used by tests to control breaker state.
 - **Import dedup**: Tests use query strings (`?sl=1`, `?cbt=1`) to force fresh module instances when re-importing the same file.
-- **No external services required**: All tests mock Redis/LLM/WhatsApp. `NODE_ENV=test` disables real Redis.
+- **No external services required**: All tests mock Redis/LLM/Discord. `NODE_ENV=test` disables real Redis.
 - **Run single test**: `node --test test/pipeline.test.js` (or `npx node --test --test-name-pattern="processLLM"`).
 - **Lockfile**: `package-lock.json` (npm). `allowScripts` in package.json is pnpm-format config (ignore unless using pnpm).
 
