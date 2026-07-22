@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: ara-discord-bot
+    env: node
+    nodeVersion: 20
+    buildCommand: cp -n personality.txt.example personality.txt 2>/dev/null; npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: OWNER_DISCORD_ID
+        sync: false
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: DASHBOARD_PASSWORD_HASH
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: OLLAMA_MODEL
+        value: gemma4:31b-cloud
+      - key: OWNER_NAME
+        value: Bakwan
+      - key: ALLOWED_CHANNEL_IDS
+        value: "1326487821615370240"
+      - key: LOG_LEVEL
+        value: warn
+      - key: CIRCUIT_BREAKER_THRESHOLD
+        value: "5"
+      - key: CIRCUIT_BREAKER_COOLDOWN_MS
+        value: "300000"
+      - key: CHUNK_SEND_RETRY
+        value: "3"
+      - key: AUTO_CHAT_ENABLED
+        value: "true"
+      - key: AUTO_CHAT_INTERVAL_MS
+        value: "3600000"
+      - key: AUTO_CHAT_MIN_GAP_MS
+        value: "10800000"
+      - key: ENABLE_CONTEXT_SUMMARY
+        value: "false"
+      - key: MAX_CONTEXT_MESSAGES
+        value: "30"
+      - key: MAX_GROUP_CONTEXT_MESSAGES
+        value: "50"
