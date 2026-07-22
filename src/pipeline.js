@@ -157,7 +157,10 @@ export async function processLLM(body, ctx) {
   if (ctx.redis && typeof ctx.redis.hgetall === 'function') {
     try { nameMap = await ctx.redis.hgetall('waifu:friends:names') || {}; } catch { /* ignore */ }
   }
-  const resolveName = (id) => (nameMap && nameMap[id]) || id;
+  const resolveName = (id) => {
+    if (id === process.env.OWNER_DISCORD_ID) return process.env.OWNER_NAME || 'Owner';
+    return (nameMap && nameMap[id]) || id;
+  };
 
   // Cross-reply laugh control: if Ara already laughed in her recent messages,
   // suppress laughs in this reply too (max 0). Otherwise allow at most one.
