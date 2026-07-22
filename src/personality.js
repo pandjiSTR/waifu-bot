@@ -34,7 +34,24 @@ export async function loadPersonality(redis) {
     try {
       fileContent = await readFile(PERSONALITY_FILE, 'utf-8');
     } catch (err) {
-      logger.warn({ err }, 'Failed to read personality.txt, falling back to cache');
+      logger.warn({ err }, 'Failed to read personality.txt, trying .example fallback');
+    }
+
+    if (fileContent && fileContent.trim()) {
+      const substituted = applyOwnerName(fileContent);
+      if (redis) {
+        await redis.set(PERSONALITY_KEY, substituted).catch(() => {});
+      }
+      return substituted;
+    }
+
+    // Fallback to personality.txt.example (useful on fresh deploy where .txt is gitignored)
+    try {
+      const exampleFile = join(__dirname, '..', 'personality.txt.example');
+      fileContent = await readFile(exampleFile, 'utf-8');
+      logger.info('Personality loaded from personality.txt.example fallback');
+    } catch {
+      // silence — example file might not exist either
     }
 
     if (fileContent && fileContent.trim()) {
@@ -48,7 +65,7 @@ export async function loadPersonality(redis) {
     if (redis) {
       const cached = await redis.get(PERSONALITY_KEY);
       if (cached) {
-        logger.info('Personality loaded from Redis (file fallback)');
+        logger.info('Personality loaded from Redis (cache fallback)');
         return applyOwnerName(cached);
       }
     }
