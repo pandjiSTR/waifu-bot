@@ -286,10 +286,6 @@ test('processLLM sends reply without duplicating the current message', async () 
     },
   };
 
-  // Pre-save user message (normally done by discord.js before processLLM)
-  const { addMessage: preAdd } = await import('../src/context.js');
-  await preAdd(ctx.redis, ctx.channelId, { sender: ctx.senderId, text: 'hai', timestamp: new Date().toISOString() }, false);
-
   await pipeline.processLLM('hai', ctx);
 
   // (a) LLM.chat was invoked
@@ -396,9 +392,6 @@ test('processLLM appends sarcastic-tone instruction when ctx.badword is set', as
     channel: { send: async () => {} },
   };
 
-  const { addMessage: bwAdd } = await import('../src/context.js');
-  await bwAdd(ctx.redis, ctx.channelId, { sender: ctx.senderId, text: 'kau anjing!', timestamp: new Date().toISOString() }, false);
-
   await pipeline.processLLM('kau anjing!', ctx);
 
   assert.ok(lastMsgs && Array.isArray(lastMsgs));
@@ -427,9 +420,6 @@ test('processLLM injects ctx.mediaContext into the last user turn', async () => 
     },
     channel: { send: async () => {} },
   };
-
-  const { addMessage: mcAdd } = await import('../src/context.js');
-  await mcAdd(ctx.redis, ctx.channelId, { sender: ctx.senderId, text: 'ini foto apa?', timestamp: new Date().toISOString() }, false);
 
   await pipeline.processLLM('ini foto apa?', ctx);
 

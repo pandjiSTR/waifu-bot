@@ -37,7 +37,7 @@ export async function initDiscord(redis, dispatcher, gatekeeper) {
     const body = (msg.content || '').slice(0, 2000);
     const isGroup = !!msg.guildId;
     if (redis) {
-      addMessage(redis, msg.channelId, { sender: msg.author.id, text: body, timestamp: new Date().toISOString() }, isGroup)
+      addMessage(redis, isGroup ? msg.channelId : msg.author.id, { sender: msg.author.id, text: body, timestamp: new Date().toISOString() }, isGroup)
         .catch(() => {});
     }
 
@@ -80,7 +80,7 @@ export async function initDiscord(redis, dispatcher, gatekeeper) {
         const body = (d.content || '').slice(0, 2000);
 
         // Save DM to context before gatekeeper
-        addMessage(redis, d.channel_id, { sender: d.author.id, text: body, timestamp: new Date().toISOString() }, false)
+        addMessage(redis, d.author.id, { sender: d.author.id, text: body, timestamp: new Date().toISOString() }, false)
           .catch(() => {});
 
         const ctx = {

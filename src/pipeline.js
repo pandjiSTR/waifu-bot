@@ -112,12 +112,16 @@ export function stripMemoryTokens(text) {
  */
 export async function processLLM(body, ctx) {
   const pStart = Date.now();
-  const userId = ctx.channelId;
   const isGroup = !!ctx.isGroup;
+  const userId = isGroup ? ctx.channelId : ctx.senderId;
 
 
 
-  // User message is already persisted in discord.js before gatekeeper.
+  // Persist the user's message so it's always in context, even when
+  // processLLM is called directly (tests). In production, discord.js also
+  // pre-saves messages before gatekeeper for non-triggering messages.
+  const persistPromise = addMessage(ctx.redis, userId, { sender: ctx.senderId, text: body, timestamp: new Date().toISOString() }, isGroup);
+
   // Start media extraction for image/PDF in parallel with context loading.
   const mediaPromise = (async () => {
     if (ctx.mediaContext) return ctx.mediaContext;
@@ -140,9 +144,9 @@ export async function processLLM(body, ctx) {
     return null;
   })();
 
-  // Run context loading, media extraction, and friend memory in parallel
+  // Run message persist, context loading, and friend memory in parallel
   const [window, mem] = await Promise.all([
-    getWindow(ctx.redis, userId, isGroup),
+    persistPromise.then(() => getWindow(ctx.redis, userId, isGroup)),
     getFriendMemory(ctx.redis, ctx.senderId),
   ]);
   const mediaContext = await mediaPromise;
