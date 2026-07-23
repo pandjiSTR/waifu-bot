@@ -57,6 +57,8 @@ export async function initDiscord(redis, dispatcher, gatekeeper) {
       messageId: msg.id,
     };
 
+    ctx._preSaved = true;
+
     const ok = await gatekeeper.shouldProcess(body, ctx);
     if (!ok) return;
 
@@ -109,6 +111,8 @@ export async function initDiscord(redis, dispatcher, gatekeeper) {
           redis,
           messageId: d.id,
         };
+
+        ctx._preSaved = true;
 
         const ok = await gatekeeper.shouldProcess(body, ctx);
         if (!ok) return;

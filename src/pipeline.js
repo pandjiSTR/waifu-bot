@@ -119,8 +119,10 @@ export async function processLLM(body, ctx) {
 
   // Persist the user's message so it's always in context, even when
   // processLLM is called directly (tests). In production, discord.js also
-  // pre-saves messages before gatekeeper for non-triggering messages.
-  const persistPromise = addMessage(ctx.redis, userId, { sender: ctx.senderId, text: body, timestamp: new Date().toISOString() }, isGroup);
+  // pre-saves messages before gatekeeper, so we skip the duplicate here.
+  if (!ctx._preSaved) {
+    await addMessage(ctx.redis, userId, { sender: ctx.senderId, text: body, timestamp: new Date().toISOString() }, isGroup);
+  }
 
   // Start media extraction for image/PDF in parallel with context loading.
   const mediaPromise = (async () => {
@@ -144,9 +146,9 @@ export async function processLLM(body, ctx) {
     return null;
   })();
 
-  // Run message persist, context loading, and friend memory in parallel
+  // Run context loading and friend memory in parallel
   const [window, mem] = await Promise.all([
-    persistPromise.then(() => getWindow(ctx.redis, userId, isGroup)),
+    getWindow(ctx.redis, userId, isGroup),
     getFriendMemory(ctx.redis, ctx.senderId),
   ]);
   const mediaContext = await mediaPromise;
