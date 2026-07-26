@@ -1,6 +1,6 @@
 // Tests for src/pipeline.js — pure logic (extractText, shouldProcess,
 // extractMemoryTokens, stripMemoryTokens) plus offline-processLLM integration
-// via injected ctx.llm.chat and mock Redis. No real WhatsApp / Redis / Ollama.
+// via injected ctx.llm.chat and mock Redis. No real Discord / Redis / Ollama.
 import { test, after } from 'node:test';
 import assert from 'node:assert';
 
@@ -450,7 +450,7 @@ test('processLLM search loop: injects results and strips [SEARCH] token from fin
       chat: async (msgs) => {
         callCount++;
         if (callCount === 1) {
-          // First call: emits a [SEARCH] token per personality.txt.
+          // First call: emits a [SEARCH] token per persona.md.
           return '[SEARCH: cuaca jakarta]';
         }
         // Second call: gives the actual answer using search results.

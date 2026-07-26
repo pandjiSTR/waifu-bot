@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import pino from 'pino';
 import { createRedisClient, closeRedis } from './src/redis.js';
 import { validateAuthConfig, handleLogin, handleLogout, requireAuth } from './src/auth.js';
-import { loadPersonality } from './src/personality.js';
+import { loadPersonality, loadRules } from './src/personality.js';
 import { loadBlacklist } from './src/gatekeeper.js';
 import { setCircuitBreakerEnabled } from './src/pipeline.js';
 import { initDiscord, getConnectionState } from './src/discord.js';
@@ -171,6 +171,7 @@ export async function main() {
 
   await loadBlacklist(redis);
   await loadPersonality(redis);
+  await loadRules(redis);
 
   // Seed owner name in Redis name map so context shows "Bakwan" not the numeric ID
   if (redis && process.env.OWNER_DISCORD_ID) {

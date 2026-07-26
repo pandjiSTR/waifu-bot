@@ -1,0 +1,10 @@
+# Rules Tambahan — Anti-Robotik / Naturalness Layer
+
+File ini dipasang BARENG persona.md. Isinya bukan kepribadian/lore, tapi mekanisme
+teknis biar output gak kebaca sebagai AI-generated.
+
+## [Daftar aturan sesuai kebutuhan bot]
+
+---
+Copy this file to rules.md and fill in the sections.
+rules.md is paired with persona.md as the behavioral rulebook.

@@ -1,10 +1,7 @@
 // Scenario tests for the Ara bot — exercises the integrated processLLM pipeline
 // (persona loading, owner-name substitution, no-limits/openness directives,
 // search-when-unknown, and vision context wiring) with a mocked LLM + fake
-// in-memory Redis. No real WhatsApp / Redis / Ollama.
-//
-// The download fix itself (reuploadRequest) is covered in test/media.test.js;
-// here the vision scenario validates that an image context reaches Ara's prompt.
+// in-memory Redis. No real Discord / Redis / Ollama.
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
@@ -12,11 +9,11 @@ import { readFileSync } from 'node:fs';
 process.env.OWNER_DISCORD_ID = '167285352321048';
 process.env.OWNER_NAME = 'Bakwan';
 
-const PERSONA = readFileSync(new URL('../personality.txt', import.meta.url), 'utf-8');
+const PERSONA = readFileSync(new URL('../persona.md', import.meta.url), 'utf-8');
 
 const pipeline = await import('../src/pipeline.js');
 
-// Minimal in-memory fake redis: serves personality.txt for the persona key and
+// Minimal in-memory fake redis: serves persona.md for the persona key and
 // implements the list ops context.js uses. Other methods are no-ops.
 function makeFakeRedis() {
   const store = new Map();
@@ -24,7 +21,7 @@ function makeFakeRedis() {
   const list = (k) => lists.get(k) || [];
   return {
     async get(k) {
-      return k === 'waifu:personality' ? PERSONA : store.get(k) ?? null;
+      return k === 'waifu:persona' ? PERSONA : store.get(k) ?? null;
     },
     async set(k, v) {
       store.set(k, String(v));

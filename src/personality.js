@@ -8,8 +8,12 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const PERSONALITY_KEY = 'waifu:personality';
-const PERSONALITY_FILE = join(__dirname, '..', 'personality.txt');
+const PERSONA_KEY = 'waifu:persona';
+const RULES_KEY = 'waifu:rules';
+const PERSONA_FILE = join(__dirname, '..', 'persona.md');
+const RULES_FILE = join(__dirname, '..', 'rules.md');
+const PERSONA_EXAMPLE = join(__dirname, '..', 'persona.md.example');
+const RULES_EXAMPLE = join(__dirname, '..', 'rules.md.example');
 
 // Substitute the {OWNER_NAME} placeholder with the configured display name so
 // the LLM sees the real owner name instead of the literal token.
@@ -18,101 +22,166 @@ export function applyOwnerName(text) {
 }
 
 /**
- * Load personality content:
- * 1. Try Redis key `waifu:personality`
- * 2. Fallback to local `personality.txt` file
- * 3. If both are empty, return an empty string
+ * Internal: load content from file → example file → Redis cache.
+ * Returns the raw content string (without owner name substitution).
+ * Redis is seeded from file/example if available (cache self-heals).
+ */
+async function _loadContent(filePath, examplePath, redisKey, label, redis) {
+  // File is the source of truth. Prefer it and reseed the Redis cache from
+  // it so edits take effect on the next start (cache self-heals).
+  // Fall back to the cache only if the file is unreadable/empty.
+  let content = '';
+
+  // 1. Try primary file
+  try {
+    content = await readFile(filePath, 'utf-8');
+  } catch (err) {
+    logger.warn({ err }, `Failed to read ${label} file (${filePath}), trying .example fallback`);
+  }
+
+  if (content && content.trim()) {
+    if (redis) {
+      await redis.set(redisKey, content).catch(() => {});
+    }
+    return content;
+  }
+
+  // 2. Try example file (useful on fresh deploy where .md is git-committed but may be absent)
+  try {
+    content = await readFile(examplePath, 'utf-8');
+    logger.info(`${label} loaded from ${examplePath} fallback`);
+  } catch {
+    // silence — example file might not exist either
+  }
+
+  if (content && content.trim()) {
+    if (redis) {
+      await redis.set(redisKey, content).catch(() => {});
+    }
+    return content;
+  }
+
+  // 3. Try Redis cache as last resort
+  if (redis) {
+    try {
+      const cached = await redis.get(redisKey);
+      if (cached) {
+        logger.info(`${label} loaded from Redis (cache fallback)`);
+        return cached;
+      }
+    } catch {
+      // silence
+    }
+  }
+
+  logger.warn(`${label} content is empty in both file and Redis`);
+  return '';
+}
+
+/**
+ * Load persona content from persona.md:
+ * 1. Read persona.md from disk
+ * 2. Fallback to persona.md.example
+ * 3. Fallback to Redis cache (waifu:persona)
  *
- * If Redis has no content but file exists, auto-seed Redis with file content.
+ * Seeds Redis from file so edits take effect on next start.
  */
 export async function loadPersonality(redis) {
   try {
-    // File is the source of truth. Prefer it and reseed the Redis cache from
-    // it so personality.txt edits take effect on the next start (cache self-heals).
-    // Fall back to the cache only if the file is unreadable/empty.
-    let fileContent = '';
-    try {
-      fileContent = await readFile(PERSONALITY_FILE, 'utf-8');
-    } catch (err) {
-      logger.warn({ err }, 'Failed to read personality.txt, trying .example fallback');
-    }
-
-    if (fileContent && fileContent.trim()) {
-      const substituted = applyOwnerName(fileContent);
-      if (redis) {
-        await redis.set(PERSONALITY_KEY, substituted).catch(() => {});
-      }
-      return substituted;
-    }
-
-    // Fallback to personality.txt.example (useful on fresh deploy where .txt is gitignored)
-    try {
-      const exampleFile = join(__dirname, '..', 'personality.txt.example');
-      fileContent = await readFile(exampleFile, 'utf-8');
-      logger.info('Personality loaded from personality.txt.example fallback');
-    } catch {
-      // silence — example file might not exist either
-    }
-
-    if (fileContent && fileContent.trim()) {
-      const substituted = applyOwnerName(fileContent);
-      if (redis) {
-        await redis.set(PERSONALITY_KEY, substituted).catch(() => {});
-      }
-      return substituted;
-    }
-
-    if (redis) {
-      const cached = await redis.get(PERSONALITY_KEY);
-      if (cached) {
-        logger.info('Personality loaded from Redis (cache fallback)');
-        return applyOwnerName(cached);
-      }
-    }
-
-    logger.warn('Personality content is empty in both file and Redis');
-    return '';
+    const content = await _loadContent(PERSONA_FILE, PERSONA_EXAMPLE, PERSONA_KEY, 'Persona', redis);
+    return content ? applyOwnerName(content) : '';
   } catch (err) {
-    logger.error({ err }, 'Failed to load personality');
+    logger.error({ err }, 'Failed to load persona');
     return '';
   }
 }
 
 /**
- * Get the current personality content from Redis.
+ * Load rules content from rules.md:
+ * 1. Read rules.md from disk
+ * 2. Fallback to rules.md.example
+ * 3. Fallback to Redis cache (waifu:rules)
+ *
+ * Seeds Redis from file so edits take effect on next start.
+ */
+export async function loadRules(redis) {
+  try {
+    const content = await _loadContent(RULES_FILE, RULES_EXAMPLE, RULES_KEY, 'Rules', redis);
+    return content ? applyOwnerName(content) : '';
+  } catch (err) {
+    logger.error({ err }, 'Failed to load rules');
+    return '';
+  }
+}
+
+/**
+ * Get the current persona content from Redis key waifu:persona.
  * Returns empty string if unavailable.
  */
 export async function getPersonalityContent(redis) {
   if (!redis) return '';
   try {
-    const content = await redis.get(PERSONALITY_KEY);
+    const content = await redis.get(PERSONA_KEY);
     return content ? applyOwnerName(content) : '';
   } catch (err) {
-    logger.error({ err }, 'Failed to get personality from Redis');
+    logger.error({ err }, 'Failed to get persona from Redis');
     return '';
   }
 }
 
 /**
- * Save personality content to Redis key `waifu:personality`.
+ * Get the current rules content from Redis key waifu:rules.
+ * Returns empty string if unavailable.
+ */
+export async function getRulesContent(redis) {
+  if (!redis) return '';
+  try {
+    const content = await redis.get(RULES_KEY);
+    return content ? applyOwnerName(content) : '';
+  } catch (err) {
+    logger.error({ err }, 'Failed to get rules from Redis');
+    return '';
+  }
+}
+
+/**
+ * Save persona content to Redis key waifu:persona.
  */
 export async function savePersonality(redis, content) {
   if (!redis) {
-    logger.warn('Redis unavailable — personality not saved');
+    logger.warn('Redis unavailable — persona not saved');
     return;
   }
   try {
-    await redis.set(PERSONALITY_KEY, content);
-    logger.info('Personality saved to Redis');
+    await redis.set(PERSONA_KEY, content);
+    logger.info('Persona saved to Redis');
   } catch (err) {
-    logger.error({ err }, 'Failed to save personality to Redis');
+    logger.error({ err }, 'Failed to save persona to Redis');
+    throw err;
+  }
+}
+
+/**
+ * Save rules content to Redis key waifu:rules.
+ */
+export async function saveRules(redis, content) {
+  if (!redis) {
+    logger.warn('Redis unavailable — rules not saved');
+    return;
+  }
+  try {
+    await redis.set(RULES_KEY, content);
+    logger.info('Rules saved to Redis');
+  } catch (err) {
+    logger.error({ err }, 'Failed to save rules to Redis');
     throw err;
   }
 }
 
 /**
  * Build the full system prompt by combining:
- * - Personality content (the base persona)
+ * - Persona content (the base identity)
+ * - Rules content (anti-robotik behavioral rules, optional)
  * - Memory section: known facts (string[]) about the user and current mood (string)
  * - Recent conversation context (if provided)
  *
@@ -121,17 +190,25 @@ export async function savePersonality(redis, content) {
  * mood is expected as a string.
  */
 export async function buildSystemPrompt(redis, context = '', facts = '', mood = '') {
-  let personality = '';
+  let persona = '';
   try {
-    personality = await getPersonalityContent(redis);
-    personality = applyOwnerName(personality);
+    persona = await getPersonalityContent(redis);
+    persona = applyOwnerName(persona);
+
+    const rules = await getRulesContent(redis);
+    const rulesStr = rules ? applyOwnerName(rules) : '';
 
     const sections = [];
 
-    // Core personality — always first
+    // Core persona — always first
     sections.push(
-      `[SYSTEM: Persona]\n${personality || '(no personality loaded)'}`
+      `[SYSTEM: Persona]\n${persona || '(no personality loaded)'}`
     );
+
+    // Rules — only if non-empty
+    if (rulesStr) {
+      sections.push(`[SYSTEM: Rules]\n${rulesStr}`);
+    }
 
     // Memory section — facts and mood about the user
     let memorySection = '';
@@ -154,6 +231,6 @@ export async function buildSystemPrompt(redis, context = '', facts = '', mood = 
     return sections.join('\n\n');
   } catch (err) {
     logger.error({ err }, 'Failed to build system prompt');
-    return personality || '';
+    return persona || '';
   }
 }

@@ -387,26 +387,29 @@ async function initSettings() {
   stopAutoRefresh();
 
   // Fetch current settings from API
-  const [personality, config] = await Promise.all([
-    api('/personality'),
+  const [personaData, rulesData, config] = await Promise.all([
+    api('/persona'),
+    api('/rules'),
     api('/config')
   ]);
 
-  // Personality textarea
-  const ta = $('#settings-personality');
-  if (ta) {
-    // Try to get full content from API, fallback to placeholder
-    if (personality && personality.content) {
-      ta.value = personality.content;
+  // Persona textarea
+  const personaTa = $('#settings-persona');
+  if (personaTa) {
+    if (personaData && personaData.content) {
+      personaTa.value = personaData.content;
     } else {
-      ta.placeholder = 'Memuat personality.txt...';
-      // Fetch raw file
-      try {
-        const res = await fetch('/personality.txt');
-        if (res.ok) ta.value = await res.text();
-      } catch (e) {
-        ta.placeholder = 'Gagal memuat personality.txt';
-      }
+      personaTa.placeholder = 'Persona tidak tersedia';
+    }
+  }
+
+  // Rules textarea
+  const rulesTa = $('#settings-rules');
+  if (rulesTa) {
+    if (rulesData && rulesData.content) {
+      rulesTa.value = rulesData.content;
+    } else {
+      rulesTa.placeholder = 'Rules tidak tersedia';
     }
   }
 
@@ -451,20 +454,37 @@ async function initSettings() {
     };
   }
 
-  // Save personality button
-  const saveBtn = $('#save-personality-btn');
-  if (saveBtn) {
-    saveBtn.onclick = async () => {
-      if (!ta) return;
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Menyimpan...';
-      await api('/personality', {
+  // Save persona button
+  const savePersonaBtn = $('#save-persona-btn');
+  if (savePersonaBtn) {
+    savePersonaBtn.onclick = async () => {
+      if (!personaTa) return;
+      savePersonaBtn.disabled = true;
+      savePersonaBtn.textContent = 'Menyimpan...';
+      await api('/persona', {
         method: 'PUT',
-        body: JSON.stringify({ content: ta.value })
+        body: JSON.stringify({ content: personaTa.value })
       });
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Simpan Personality';
-      toast('Personality tersimpan');
+      savePersonaBtn.disabled = false;
+      savePersonaBtn.textContent = 'Simpan Persona';
+      toast('Persona tersimpan');
+    };
+  }
+
+  // Save rules button
+  const saveRulesBtn = $('#save-rules-btn');
+  if (saveRulesBtn) {
+    saveRulesBtn.onclick = async () => {
+      if (!rulesTa) return;
+      saveRulesBtn.disabled = true;
+      saveRulesBtn.textContent = 'Menyimpan...';
+      await api('/rules', {
+        method: 'PUT',
+        body: JSON.stringify({ content: rulesTa.value })
+      });
+      saveRulesBtn.disabled = false;
+      saveRulesBtn.textContent = 'Simpan Rules';
+      toast('Rules tersimpan');
     };
   }
 }

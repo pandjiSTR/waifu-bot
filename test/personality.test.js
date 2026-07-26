@@ -25,11 +25,11 @@ before(async () => {
   personality = await import('../src/personality.js');
 });
 
-test('loadPersonality reads the real personality.txt when Redis is empty', async () => {
+test('loadPersonality reads the real persona.md when Redis is empty', async () => {
   // No key seeded in fake redis -> falls back to local file (read-only).
   const content = await personality.loadPersonality(fakeRedis);
   assert.ok(typeof content === 'string');
-  assert.ok(content.length > 0, 'expected real personality.txt content');
+  assert.ok(content.length > 0, 'expected real persona.md content');
 });
 
 test('loadPersonality seeds Redis after reading from file', async () => {
@@ -173,7 +173,7 @@ test('buildSystemPrompt applies owner name from saved persona', async () => {
   assert.doesNotMatch(prompt, /\{OWNER_NAME\}/);
 });
 
-test('buildSystemPrompt includes no-exclamation directive from personality.txt', async () => {
+test('buildSystemPrompt includes no-exclamation directive from persona.md', async () => {
   const redis = createFakeRedis();
   const content = await personality.loadPersonality(redis);
   assert.ok(content.length > 0, 'personality should be loaded');
@@ -186,5 +186,56 @@ test('buildSystemPrompt restricts "beb" to owner only', async () => {
   const content = await personality.loadPersonality(redis);
   assert.ok(content.length > 0, 'personality should be loaded');
   const prompt = await personality.buildSystemPrompt(redis);
-  assert.match(prompt, /CUMA ke/);
+  assert.match(prompt, /Panggilan ke.*beb/);
+});
+
+test('loadRules reads the real rules.md when Redis is empty', async () => {
+  const fakeRedis = createFakeRedis();
+  const content = await personality.loadRules(fakeRedis);
+  assert.ok(typeof content === 'string');
+  assert.ok(content.length > 0, 'expected real rules.md content');
+});
+
+test('loadRules seeds Redis after reading from file', async () => {
+  const localContent = await personality.loadRules(createFakeRedis());
+  const seededRedis = createFakeRedis();
+  await personality.saveRules(seededRedis, localContent);
+  const fromRedis = await personality.getRulesContent(seededRedis);
+  assert.strictEqual(fromRedis, localContent);
+});
+
+test('getRulesContent returns empty string when redis is null', async () => {
+  const content = await personality.getRulesContent(null);
+  assert.strictEqual(content, '');
+});
+
+test('saveRules is a no-op (no throw) when redis is null', async () => {
+  await assert.doesNotReject(
+    personality.saveRules(null, 'anything')
+  );
+});
+
+test('save + get roundtrip for rules through fake redis', async () => {
+  const redis = createFakeRedis();
+  const sample = 'Rules: No AI patterns.';
+  await personality.saveRules(redis, sample);
+  const readBack = await personality.getRulesContent(redis);
+  assert.strictEqual(readBack, sample);
+});
+
+test('buildSystemPrompt includes [SYSTEM: Rules] section', async () => {
+  const redis = createFakeRedis();
+  await personality.savePersonality(redis, 'Base persona');
+  await personality.saveRules(redis, 'Some rules content');
+  const prompt = await personality.buildSystemPrompt(redis);
+  assert.match(prompt, /\[SYSTEM: Rules\]/);
+  assert.match(prompt, /Some rules content/);
+});
+
+test('buildSystemPrompt omits rules section when no rules loaded', async () => {
+  const redis = createFakeRedis();
+  await personality.savePersonality(redis, 'Base persona');
+  // Don't save rules — simulate empty
+  const prompt = await personality.buildSystemPrompt(redis);
+  assert.doesNotMatch(prompt, /\[SYSTEM: Rules\]/);
 });

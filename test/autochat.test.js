@@ -1,5 +1,5 @@
 // Tests for src/autochat.js — pure logic only.
-// No real WhatsApp / Ollama / Redis connections.
+// No real Discord / Ollama / Redis connections.
 // Uses fake redis, injected chat/sendChunks, and circuit breaker helpers.
 import { test } from 'node:test';
 import assert from 'node:assert';

@@ -93,7 +93,7 @@ ara/
 │   ├── badwords.js             Static badword detection list
 │   ├── autochat.js             Proactive messaging scheduler
 │   ├── dispatch.js             Per-user serial queue + typing indicator
-│   ├── personality.js          Loader & editor for personality.txt
+│   ├── personality.js          Loader & editor for persona.md + rules.md
 │   ├── auth.js                 JWT + bcrypt auth middleware
 │   ├── api-skeleton.js         27 dashboard API endpoints
 │   ├── redis.js                Redis client + scanAll helper
@@ -109,8 +109,8 @@ ara/
 │   ├── logs.html               System logs
 │   └── debug.html              Debug diagnostics
 ├── test/                       19 files, 256 tests
-├── personality.txt             Bot persona (gitignored)
-├── personality.txt.example     Template with persona structure
+├── persona.md                  Bot persona (tracked)
+├── rules.md                    Anti-robotik behavioral rules (tracked)
 ├── logo.svg                    Bot logo
 └── dashboard/out/              Built dashboard (deploy target)
 ```
@@ -309,10 +309,10 @@ Coverage: api-skeleton, auth, autochat, badwords, chunks, circuit, circuit-alert
 ## Conventions
 
 - **ESM only** — `import`/`export`, no CommonJS
-- **No emoji** in bot responses (per personality.txt)
+- **No emoji** in bot responses (per persona.md + rules.md)
 - **Async/await** throughout
 - **Pino** for logging (warn level in production)
-- **personality.txt** = single source of truth for bot persona
+- **persona.md + rules.md** = dual source of truth for bot identity
 
 ---
 
