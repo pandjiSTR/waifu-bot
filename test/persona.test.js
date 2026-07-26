@@ -154,9 +154,7 @@ test('buildSystemPrompt renders context section', async () => {
 test('buildSystemPrompt handles null redis gracefully', async () => {
   const prompt = await persona.buildSystemPrompt(null);
   assert.match(prompt, /\[SYSTEM: Persona\]/);
-  assert.match(prompt, /\(no persona loaded\)/);
-  assert.match(prompt, /\[SYSTEM: Rules\]/);
-  assert.match(prompt, /\(no rules loaded\)/);
+  assert.match(prompt, /\(no personality loaded\)/);
 });
 
 test('applyOwnerName substitutes {OWNER_NAME} with env value', () => {

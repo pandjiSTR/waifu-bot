@@ -87,7 +87,7 @@ export async function getPersonaContent(redis) {
   if (!redis) return '';
   try {
     const content = await redis.get(PERSONA_KEY);
-    return content ? applyOwnerName(content) : '';
+    return content || '';
   } catch (err) {
     logger.error({ err }, 'Failed to get persona from Redis');
     return '';
@@ -98,7 +98,7 @@ export async function getRulesContent(redis) {
   if (!redis) return '';
   try {
     const content = await redis.get(RULES_KEY);
-    return content ? applyOwnerName(content) : '';
+    return content || '';
   } catch (err) {
     logger.error({ err }, 'Failed to get rules from Redis');
     return '';
@@ -135,22 +135,21 @@ export async function saveRules(redis, content) {
 
 export async function buildSystemPrompt(redis, context = '', facts = '', mood = '') {
   let persona = '';
-  let rules = '';
   try {
     persona = await getPersonaContent(redis);
     persona = applyOwnerName(persona);
-    rules = await getRulesContent(redis);
-    rules = applyOwnerName(rules);
+    const rules = await getRulesContent(redis);
+    const rulesStr = rules ? applyOwnerName(rules) : '';
 
     const sections = [];
 
     sections.push(
-      `[SYSTEM: Persona]\n${persona || '(no persona loaded)'}`
+      `[SYSTEM: Persona]\n${persona || '(no personality loaded)'}`
     );
 
-    sections.push(
-      `[SYSTEM: Rules]\n${rules || '(no rules loaded)'}`
-    );
+    if (rulesStr) {
+      sections.push(`[SYSTEM: Rules]\n${rulesStr}`);
+    }
 
     let memorySection = '';
     const factsArray = Array.isArray(facts) ? facts : [];
