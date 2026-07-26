@@ -16,9 +16,7 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Personality (contains bot identity)
-persona.md
-rules.md
+# Discord fork guide (contains personal context)
 PROMPT.md
 
 # Private chat logs
