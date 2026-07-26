@@ -55,7 +55,7 @@ function stripWrappingFence(text) {
  * @param {string} text
  * @returns {boolean}
  */
-const LAUGH_PATTERN = 'wkakwkw|(?:wk)+|awikwok|akwo[a-z]+';
+const LAUGH_PATTERN = 'hehe+|hihi+|wkakwkw|(?:wk)+|awikwok|akwo[a-z]+';
 export function hasLaugh(text) {
   // Fresh, non-global regex each call — `test()` on a /g regex mutates
   // lastIndex and would give alternating results across calls.
