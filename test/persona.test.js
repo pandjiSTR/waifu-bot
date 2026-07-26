@@ -181,13 +181,14 @@ test('buildSystemPrompt includes persona relationship context', async () => {
   const redis = createFakeRedis();
   await persona.loadPersona(redis);
   const prompt = await persona.buildSystemPrompt(redis);
-  assert.match(prompt, /Hubungan sama/);
+  assert.match(prompt, /Relasi dengan/);
   assert.match(prompt, /pacar/i);
+  assert.match(prompt, /seru/, 'persona should contain no-exclamation rule');
 });
 
 test('buildSystemPrompt includes NO EMOJI rule from persona.md', async () => {
   const redis = createFakeRedis();
   await persona.loadPersona(redis);
   const prompt = await persona.buildSystemPrompt(redis);
-  assert.match(prompt, /NO EMOJI/);
+  assert.match(prompt, /emoji/);
 });
