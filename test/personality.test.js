@@ -173,12 +173,12 @@ test('buildSystemPrompt applies owner name from saved persona', async () => {
   assert.doesNotMatch(prompt, /\{OWNER_NAME\}/);
 });
 
-test('buildSystemPrompt includes no-exclamation directive from persona.md', async () => {
+test('buildSystemPrompt includes no-emoji directive from persona.md', async () => {
   const redis = createFakeRedis();
   const content = await personality.loadPersonality(redis);
   assert.ok(content.length > 0, 'personality should be loaded');
   const prompt = await personality.buildSystemPrompt(redis);
-  assert.match(prompt, /tanda seru/, 'system prompt should contain the no-exclamation rule');
+  assert.match(prompt, /NO EMOJI/, 'system prompt should contain the no-emoji rule');
 });
 
 test('buildSystemPrompt restricts "beb" to owner only', async () => {
