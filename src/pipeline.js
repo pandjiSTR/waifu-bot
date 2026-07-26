@@ -335,6 +335,14 @@ export async function processLLM(body, ctx) {
         options: { num_ctx: isGroup ? 8192 : 4096 },
         signal: searchAc.signal,
       });
+
+      // Replace [link] placeholder dengan URL asli dari hasil pencarian
+      if (reply && reply.includes('[link]')) {
+        const firstUrl = results.match(/https?:\/\/[^\s)>]+/);
+        if (firstUrl) {
+          reply = reply.replaceAll('[link]', firstUrl[0]);
+        }
+      }
     } catch (err) {
       if (searchAc.signal.aborted) {
         logger.warn('search loop timed out — stopping further search iterations');
