@@ -82,8 +82,9 @@ export async function buildSystemPrompt(redis, context = '', facts = '', mood = 
 
     const sections = [];
 
+    const dateStr = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     sections.push(
-      `[SYSTEM: Persona]\n${persona || '(no personality loaded)'}`
+      `[SYSTEM: Persona]\n${persona || '(no personality loaded)'}\n\nHari ini: ${dateStr}.`
     );
 
     let memorySection = '';
