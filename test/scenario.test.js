@@ -104,7 +104,7 @@ test('scenario: owner asks "masi sayang gak" — warm, identifies as Panji/pacar
   const sys = systemPromptOf(lastMsgs);
   assert.match(sys, /Panji/, 'owner name should be substituted into the prompt');
   assert.match(sys, /pacar/i, 'relationship to owner should be present');
-  assert.match(sys, /emoji/, 'no-emoji rule should be present');
+  assert.match(sys, /EMOJI/, 'no-emoji rule should be present');
   assert.match(sys, /Prioritas/, 'priority rules should be present');
   assert.strictEqual(ctx._sent.at(-1), 'iyaaa sayang, masa tanya lagii');
 });
