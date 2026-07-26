@@ -327,7 +327,7 @@ export async function processLLM(body, ctx) {
 
     messages.push({
       role: 'user',
-      content: `[HASIL PENCARIAN]\n${results}\n\nGunakan hasil di atas untuk menjawab.`,
+      content: `[HASIL PENCARIAN]\n${results}\n\nGunakan hasil di atas untuk menjawab. Kalo nemu link, tulis langsung URL-nya, jangan pake placeholder.`,
     });
 
     try {
