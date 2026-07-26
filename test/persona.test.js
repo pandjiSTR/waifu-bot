@@ -177,18 +177,17 @@ test('buildSystemPrompt applies owner name from saved persona', async () => {
   assert.doesNotMatch(prompt, /\{OWNER_NAME\}/);
 });
 
-test('buildSystemPrompt includes no-exclamation directive from persona.md', async () => {
+test('buildSystemPrompt includes persona relationship context', async () => {
   const redis = createFakeRedis();
-  const content = await persona.loadPersona(redis);
-  assert.ok(content.length > 0, 'persona should be loaded');
+  await persona.loadPersona(redis);
   const prompt = await persona.buildSystemPrompt(redis);
-  assert.match(prompt, /tanda seru/, 'system prompt should contain the no-exclamation rule');
+  assert.match(prompt, /Hubungan sama/);
+  assert.match(prompt, /pacar/i);
 });
 
-test('buildSystemPrompt restricts "beb" to owner only', async () => {
+test('buildSystemPrompt includes NO EMOJI rule from persona.md', async () => {
   const redis = createFakeRedis();
-  const content = await persona.loadPersona(redis);
-  assert.ok(content.length > 0, 'persona should be loaded');
+  await persona.loadPersona(redis);
   const prompt = await persona.buildSystemPrompt(redis);
-  assert.match(prompt, /Panggilan ke/);
+  assert.match(prompt, /NO EMOJI/);
 });
