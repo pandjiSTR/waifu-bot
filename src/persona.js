@@ -83,8 +83,9 @@ export async function buildSystemPrompt(redis, context = '', facts = '', mood = 
     const sections = [];
 
     const now = new Date();
-    const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    const tz = 'Asia/Jakarta';
+    const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz });
+    const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: tz });
     sections.push(
       `[SYSTEM: Persona]\n${persona || '(no personality loaded)'}\n\nSekarang: ${dateStr}, ${timeStr}.`
     );
