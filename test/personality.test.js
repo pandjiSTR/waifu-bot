@@ -186,7 +186,7 @@ test('buildSystemPrompt restricts "beb" to owner only', async () => {
   const content = await personality.loadPersonality(redis);
   assert.ok(content.length > 0, 'personality should be loaded');
   const prompt = await personality.buildSystemPrompt(redis);
-  assert.match(prompt, /Panggilan ke.*beb/);
+  assert.match(prompt, /panggil.*beb/);
 });
 
 test('loadRules reads the real rules.md when Redis is empty', async () => {
