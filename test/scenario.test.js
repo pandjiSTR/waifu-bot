@@ -15,7 +15,6 @@ process.env.OWNER_NUMBER = '6285176719006,167285352321048';
 process.env.OWNER_NAME = 'Panji';
 
 const PERSONA = readFileSync(new URL('../persona.md', import.meta.url), 'utf-8');
-const RULES = readFileSync(new URL('../rules.md', import.meta.url), 'utf-8');
 
 const pipeline = await import('../src/pipeline.js');
 
@@ -28,7 +27,6 @@ function makeFakeRedis() {
   return {
     async get(k) {
       if (k === 'waifu:persona') return PERSONA;
-      if (k === 'waifu:rules') return RULES;
       return store.get(k) ?? null;
     },
     async set(k, v) {

@@ -1,4 +1,4 @@
-import { getPersonaContent, savePersona, getRulesContent, saveRules } from './persona.js';
+import { getPersonaContent, savePersona } from './persona.js';
 import { setBlacklist } from './gatekeeper.js';
 import { setCircuitBreakerEnabled } from './pipeline.js';
 import { scanAll } from './redis.js';
@@ -199,45 +199,6 @@ export async function handleUpdatePersona(req, res) {
     json(res, 200, { message: 'Persona updated' });
   } catch (err) {
     logger.error({ err }, 'Update persona handler error');
-    json(res, 500, { error: 'Internal server error' });
-  }
-}
-
-/**
- * GET /api/rules
- * Requires auth.
- * Returns the current rules text content.
- */
-export async function handleGetRules(req, res) {
-  try {
-    const content = await getRulesContent(req.redis);
-    json(res, 200, { content });
-  } catch (err) {
-    logger.error({ err }, 'Get rules handler error');
-    json(res, 500, { error: 'Internal server error' });
-  }
-}
-
-/**
- * PUT /api/rules
- * Requires auth.
- * Saves the rules content sent in the request body.
- * Expects: { content: string }
- */
-export async function handleUpdateRules(req, res) {
-  try {
-    const body = await readBody(req);
-    const { content } = body;
-
-    if (content === undefined || content === null) {
-      json(res, 400, { error: 'Field "content" is required' });
-      return;
-    }
-
-    await saveRules(req.redis, String(content));
-    json(res, 200, { message: 'Rules updated' });
-  } catch (err) {
-    logger.error({ err }, 'Update rules handler error');
     json(res, 500, { error: 'Internal server error' });
   }
 }
@@ -803,8 +764,6 @@ export function registerApiRoutes(router, requireAuth) {
   router.delete('/api/friends/:userId/memory', requireAuth, handleClearFriendMemory);
   router.get('/api/persona', requireAuth, handleGetPersona);
   router.put('/api/persona', requireAuth, handleUpdatePersona);
-  router.get('/api/rules', requireAuth, handleGetRules);
-  router.put('/api/rules', requireAuth, handleUpdateRules);
   router.get('/api/settings', requireAuth, handleGetSettings);
   router.put('/api/settings', requireAuth, handleUpdateSettings);
 

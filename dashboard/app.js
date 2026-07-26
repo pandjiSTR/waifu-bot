@@ -386,10 +386,9 @@ function renderOverviewChart(messages) {
 async function initSettings() {
   stopAutoRefresh();
 
-  // Fetch persona + rules from API
-  const [persona, rules, config] = await Promise.all([
+  // Fetch persona + config from API
+  const [persona, config] = await Promise.all([
     api('/persona'),
-    api('/rules'),
     api('/config')
   ]);
 
@@ -400,16 +399,6 @@ async function initSettings() {
       personaTa.value = persona.content;
     } else {
       personaTa.placeholder = 'Gagal memuat persona';
-    }
-  }
-
-  // Rules textarea
-  const rulesTa = $('#settings-rules');
-  if (rulesTa) {
-    if (rules && rules.content) {
-      rulesTa.value = rules.content;
-    } else {
-      rulesTa.placeholder = 'Gagal memuat rules';
     }
   }
 
@@ -470,21 +459,6 @@ async function initSettings() {
     };
   }
 
-  // Save rules button
-  const saveRulesBtn = $('#save-rules-btn');
-  if (saveRulesBtn && rulesTa) {
-    saveRulesBtn.onclick = async () => {
-      saveRulesBtn.disabled = true;
-      saveRulesBtn.textContent = 'Menyimpan...';
-      await api('/rules', {
-        method: 'PUT',
-        body: JSON.stringify({ content: rulesTa.value })
-      });
-      saveRulesBtn.disabled = false;
-      saveRulesBtn.textContent = 'Simpan Rules';
-      toast('Rules tersimpan');
-    };
-  }
 }
 
 /* ─── Logs Page ──────────────────────────────────────────────── */

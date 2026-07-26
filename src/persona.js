@@ -10,8 +10,7 @@ const __dirname = dirname(__filename);
 
 const PERSONA_KEY = 'waifu:persona';
 const PERSONA_FILE = join(__dirname, '..', 'persona.md');
-const RULES_KEY = 'waifu:rules';
-const RULES_FILE = join(__dirname, '..', 'rules.md');
+
 
 export function applyOwnerName(text) {
   return String(text ?? '').replaceAll('{OWNER_NAME}', process.env.OWNER_NAME || 'Owner');
@@ -50,39 +49,6 @@ export async function loadPersona(redis) {
   }
 }
 
-export async function loadRules(redis) {
-  try {
-    let fileContent = '';
-    try {
-      fileContent = await readFile(RULES_FILE, 'utf-8');
-    } catch (err) {
-      logger.warn({ err }, 'Failed to read rules.md, falling back to cache');
-    }
-
-    if (fileContent && fileContent.trim()) {
-      const substituted = applyOwnerName(fileContent);
-      if (redis) {
-        await redis.set(RULES_KEY, substituted).catch(() => {});
-      }
-      return substituted;
-    }
-
-    if (redis) {
-      const cached = await redis.get(RULES_KEY);
-      if (cached) {
-        logger.info('Rules loaded from Redis (file fallback)');
-        return applyOwnerName(cached);
-      }
-    }
-
-    logger.warn('Rules content is empty in both file and Redis');
-    return '';
-  } catch (err) {
-    logger.error({ err }, 'Failed to load rules');
-    return '';
-  }
-}
-
 export async function getPersonaContent(redis) {
   if (!redis) return '';
   try {
@@ -90,17 +56,6 @@ export async function getPersonaContent(redis) {
     return content || '';
   } catch (err) {
     logger.error({ err }, 'Failed to get persona from Redis');
-    return '';
-  }
-}
-
-export async function getRulesContent(redis) {
-  if (!redis) return '';
-  try {
-    const content = await redis.get(RULES_KEY);
-    return content || '';
-  } catch (err) {
-    logger.error({ err }, 'Failed to get rules from Redis');
     return '';
   }
 }
@@ -119,37 +74,17 @@ export async function savePersona(redis, content) {
   }
 }
 
-export async function saveRules(redis, content) {
-  if (!redis) {
-    logger.warn('Redis unavailable — rules not saved');
-    return;
-  }
-  try {
-    await redis.set(RULES_KEY, content);
-    logger.info('Rules saved to Redis');
-  } catch (err) {
-    logger.error({ err }, 'Failed to save rules to Redis');
-    throw err;
-  }
-}
-
 export async function buildSystemPrompt(redis, context = '', facts = '', mood = '') {
   let persona = '';
   try {
     persona = await getPersonaContent(redis);
     persona = applyOwnerName(persona);
-    const rules = await getRulesContent(redis);
-    const rulesStr = rules ? applyOwnerName(rules) : '';
 
     const sections = [];
 
     sections.push(
       `[SYSTEM: Persona]\n${persona || '(no personality loaded)'}`
     );
-
-    if (rulesStr) {
-      sections.push(`[SYSTEM: Rules]\n${rulesStr}`);
-    }
 
     let memorySection = '';
     const factsArray = Array.isArray(facts) ? facts : [];

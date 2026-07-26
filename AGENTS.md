@@ -56,7 +56,7 @@ WhatsApp Message (Baileys WebSocket)
 - **Dashboard**: `dashboard/` — static SPA (vanilla JS + Chart.js), built into `dashboard/out/` (gitignored). Run `npm run build` before serving.
 - **API**: 27 REST endpoints in `src/api-skeleton.js` — health, auth, friends, chat, analytics, settings, debug, persona, blacklist, circuit breaker, auto-chat.
 - **Router**: Custom `Router` class in `index.js` (no Express) with GET/POST/PUT/DELETE + parametric routes.
-- **Persona + Rules**: `persona.md` + `rules.md` (gitignored) — persona identity + behavioral rules. `{OWNER_NAME}` placeholder substituted at runtime.
+- **Persona**: `persona.md` (gitignored) — persona identity + behavioral rules. `{OWNER_NAME}` placeholder substituted at runtime.
 - **Tests**: `test/*.test.js` — 20 files, ~256 tests.
 
 ## Conventions

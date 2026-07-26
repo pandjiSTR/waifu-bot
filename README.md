@@ -114,7 +114,6 @@ waifu-bot/
 │   └── debug.html              Debug diagnostics
 ├── test/                       20 files, 256 tests
 ├── persona.md                  Bot persona (gitignored)
-├── rules.md                    Behavioral rules (gitignored)
 ├── logo.svg                    Bot logo
 └── dashboard/out/              Built dashboard (deploy target)
 ```
@@ -191,8 +190,6 @@ waifu-bot/
 | GET | /api/debug | Circuit breaker + uptime | ✅ |
 | GET | /api/persona | Get persona content | ✅ |
 | PUT | /api/persona | Update persona | ✅ |
-| GET | /api/rules | Get rules content | ✅ |
-| PUT | /api/rules | Update rules | ✅ |
 | GET | /api/qr | Get QR code (when pairing) | ✅ |
 | GET | /api/blacklist | Get blacklist | ✅ |
 | PUT | /api/blacklist | Update blacklist | ✅ |
