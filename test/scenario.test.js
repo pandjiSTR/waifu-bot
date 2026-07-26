@@ -14,11 +14,12 @@ import { readFileSync } from 'node:fs';
 process.env.OWNER_NUMBER = '6285176719006,167285352321048';
 process.env.OWNER_NAME = 'Panji';
 
-const PERSONA = readFileSync(new URL('../personality.txt', import.meta.url), 'utf-8');
+const PERSONA = readFileSync(new URL('../persona.md', import.meta.url), 'utf-8');
+const RULES = readFileSync(new URL('../rules.md', import.meta.url), 'utf-8');
 
 const pipeline = await import('../src/pipeline.js');
 
-// Minimal in-memory fake redis: serves personality.txt for the persona key and
+// Minimal in-memory fake redis: serves persona.md + rules.md for persona/rules keys and
 // implements the list ops context.js uses. Other methods are no-ops.
 function makeFakeRedis() {
   const store = new Map();
@@ -26,7 +27,9 @@ function makeFakeRedis() {
   const list = (k) => lists.get(k) || [];
   return {
     async get(k) {
-      return k === 'waifu:personality' ? PERSONA : store.get(k) ?? null;
+      if (k === 'waifu:persona') return PERSONA;
+      if (k === 'waifu:rules') return RULES;
+      return store.get(k) ?? null;
     },
     async set(k, v) {
       store.set(k, String(v));

@@ -7,10 +7,10 @@
 // It does NOT touch the *voice* of the reply. Per Design Principle #1
 // (AGENTS.md) and PRD §5.7, persona-specific filler expressions, typo
 // "correction", and vowel-over-extension fixing must come from
-// `personality.txt` — NOT from hardcoded code here.
+// `persona.md` / `rules.md` — NOT from hardcoded code here.
 //
-// TODO(persona-filler): if PRD §5.7's "filler from personality.txt" is needed,
-// read the filler list from the personality config (load via personality.js)
+// TODO(persona-filler): if PRD §5.7's "filler from persona.md / rules.md" is needed,
+// read the filler list from the persona config (load via persona.js)
 // and apply it HERE. Do not hardcode any persona string in this file.
 
 /**
@@ -67,7 +67,7 @@ export function hasLaugh(text) {
  * (the first); pass { max: 0 } to strip them all.
  *
  * This is a behavioral guard (per explicit instruction) — the allowed laugh
- * tokens mirror the list in personality.txt. It never invents persona voice;
+ * tokens mirror the list in persona.md / rules.md. It never invents persona voice;
  * it only thins out redundant laughs so Ara doesn't spam "wkwk" every line.
  * Callers use { max: 0 } when Ara already laughed recently in the conversation
  * (cross-reply frequency control).

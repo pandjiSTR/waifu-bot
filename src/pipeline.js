@@ -1,6 +1,6 @@
 import pino from 'pino';
 import { normalizeNumber, getOwnerNumbers } from './util.js';
-import { buildSystemPrompt } from './personality.js';
+import { buildSystemPrompt } from './persona.js';
 import { chat } from './llm.js';
 import { addMessage, getWindow, summarizeContext, replaceLastMessage } from './context.js';
 import { sendChunks } from './chunks.js';
@@ -15,7 +15,7 @@ import { extractText, shouldProcess, trackBotMessage, loadBlacklist, setBlacklis
 
 // PRD §5.7: a detected badword must NOT block the message — it shifts the reply
 // tone to sarcastic. This is a TASK instruction (behavior), not persona voice
-// (persona strings live only in personality.txt per AGENTS.md #1).
+// (persona strings live only in persona.md and rules.md per AGENTS.md #1).
 const BADWORD_TONE_INSTRUCTION = 'Tanggapi dengan nada sarkastik.';
 
 const MULTI_MESSAGE_INSTRUCTION = `\n\nFORMAT BALASAN: Baris kosong (dua enter) = pesan/bubble baru yang kepisah. Pakai baris kosong CUMA kalau emang mau misahin poin/topik beda (misal list panjang, penjelasan bertahap). Balasan pendek/santai/ngobrol biasa: tetap 1 bubble, JANGAN kasih baris kosong. Jangan pernah ada baris kosong yang gak disengaja.`;
@@ -294,7 +294,7 @@ export async function processLLM(body, ctx) {
 
   // ── SEARCH LOOP (Fase 6, §5.6 / §6.2) ──
   // Persona-driven: if the model emits [SEARCH: query], Ara needs to look up
-  // information.  The decision to search comes exclusively from personality.txt
+  // information.  The decision to search comes exclusively from persona.md/rules.md
   // (see PRD line 128) — no keyword list or forced-search logic in code.
   const MAX_SEARCH_ITERATIONS = 2;
   let searchIterations = 0;
@@ -355,7 +355,7 @@ export async function processLLM(body, ctx) {
 
   // Strip leading "tunggu/sebentar/wait" artifacts that remain when a search
   // was attempted but failed to produce an actual answer (e.g. webSearch
-  // returned empty or the follow-up LLM call errored). The personality.txt
+// returned empty or the follow-up LLM call errored).  The persona.md
   // forbids sending "tunggu" as a message, but this is a safety net so users
   // never see a fake wait message followed by silence.
   const stripped = reply.replace(/^(tunggu\s*(ya|dulu|sebentar|bentar)?[\s,.\n]*)+/i, '').trim();

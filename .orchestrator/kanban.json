@@ -1,0 +1,67 @@
+{
+  "project": "Ara (waifu-bot)",
+  "description": "Personal WhatsApp AI Chatbot — Baileys + Ollama Cloud + Upstash Redis",
+  "columns": ["Backlog", "Ready", "In Progress", "Review", "Done"],
+  "cards": [
+    {
+      "id": 1,
+      "title": "Project initialization",
+      "column": "Done",
+      "assignee": "orchestrator",
+      "priority": "high"
+    },
+    {
+      "id": 2,
+      "title": "Phase 0: Delete old files + rename modules",
+      "column": "Done",
+      "assignee": "orchestrator",
+      "priority": "high"
+    },
+    {
+      "id": 3,
+      "title": "Phase 1A: Backend refactor — persona.js + API + imports",
+      "column": "Done",
+      "assignee": "general",
+      "priority": "high"
+    },
+    {
+      "id": 4,
+      "title": "Phase 1B: Dashboard — settings.html + app.js",
+      "column": "Done",
+      "assignee": "orchestrator-frontend",
+      "priority": "high"
+    },
+    {
+      "id": 5,
+      "title": "Phase 1C: Docs + config",
+      "column": "Done",
+      "assignee": "general",
+      "priority": "medium"
+    },
+    {
+      "id": 6,
+      "title": "Phase 2: Tests",
+      "column": "Done",
+      "assignee": "orchestrator-testing",
+      "priority": "high"
+    },
+    {
+      "id": 7,
+      "title": "Phase 3: Build + Verify",
+      "column": "Done",
+      "assignee": "orchestrator",
+      "priority": "high"
+    },
+    {
+      "id": 8,
+      "title": "Phase 4: Quality review",
+      "column": "Done",
+      "assignee": "orchestrator-quality",
+      "priority": "medium"
+    }
+  ],
+  "wip_limits": {
+    "In Progress": 3,
+    "Review": 2
+  }
+}

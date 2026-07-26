@@ -17,5 +17,6 @@ Thumbs.db
 .idea/
 
 # Personality (contains bot identity)
-personality.txt
+persona.md
+rules.md
 PROMPT.md

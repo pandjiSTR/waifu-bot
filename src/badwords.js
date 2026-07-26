@@ -3,7 +3,7 @@
 // substring (multi-word phrases). It only flags; the pipeline decides tone.
 //
 // PRD §5.7: a detected badword must NOT block the message — it only shifts the
-// reply tone to sarcastic (driven by personality.txt), handled in pipeline.js.
+// reply tone to sarcastic (driven by persona.md / rules.md), handled in pipeline.js.
 
 // Common Indonesian + English badwords. Kept deliberately small and static;
 // expand as needed. Multi-word entries are matched as whole phrases.

@@ -97,7 +97,7 @@ waifu-bot/
 │   ├── sticker.js              Sharp-based image &rarr; WebP sticker
 │   ├── autochat.js             Proactive messaging scheduler
 │   ├── dispatch.js             Per-JID serial queue + typing indicator
-│   ├── personality.js          Loader & editor for personality.txt
+│   ├── persona.js              Loader & editor for persona.md + rules.md
 │   ├── auth.js                 JWT + bcrypt auth middleware
 │   ├── api-skeleton.js         27 dashboard API endpoints
 │   ├── redis.js                Redis client + scanAll helper
@@ -113,8 +113,8 @@ waifu-bot/
 │   ├── logs.html               System logs
 │   └── debug.html              Debug diagnostics
 ├── test/                       20 files, 256 tests
-├── personality.txt             Bot persona (gitignored)
-├── personality.txt.example     Template with persona structure
+├── persona.md                  Bot persona (gitignored)
+├── rules.md                    Behavioral rules (gitignored)
 ├── logo.svg                    Bot logo
 └── dashboard/out/              Built dashboard (deploy target)
 ```
@@ -189,8 +189,10 @@ waifu-bot/
 | PUT | /api/friends/:id/memory | Update friend memory | ✅ |
 | DELETE | /api/friends/:id/memory | Clear friend memory | ✅ |
 | GET | /api/debug | Circuit breaker + uptime | ✅ |
-| GET | /api/personality | Get personality content | ✅ |
-| PUT | /api/personality | Update personality | ✅ |
+| GET | /api/persona | Get persona content | ✅ |
+| PUT | /api/persona | Update persona | ✅ |
+| GET | /api/rules | Get rules content | ✅ |
+| PUT | /api/rules | Update rules | ✅ |
 | GET | /api/qr | Get QR code (when pairing) | ✅ |
 | GET | /api/blacklist | Get blacklist | ✅ |
 | PUT | /api/blacklist | Update blacklist | ✅ |
@@ -287,7 +289,7 @@ npm test       # 256 tests, node:test native
 npm run lint   # ESLint
 ```
 
-Coverage: auth, autochat, badwords, chunks, circuit, circuit-alert, context, dispatch, gatekeeper, llm, media, memory, naturalize, personality, pipeline, redis, search, sticker, scenario (19 test files).
+Coverage: auth, autochat, badwords, chunks, circuit, circuit-alert, context, dispatch, gatekeeper, llm, media, memory, naturalize, persona, pipeline, redis, search, sticker, scenario (19 test files).
 
 ---
 
@@ -306,10 +308,10 @@ Coverage: auth, autochat, badwords, chunks, circuit, circuit-alert, context, dis
 ## Conventions
 
 - **ESM only** — `import`/`export`, no CommonJS
-- **No emoji** in bot responses (per personality.txt)
+- **No emoji** in bot responses (per persona.md / rules.md)
 - **Async/await** throughout
 - **Pino** for logging (warn level in production)
-- **personality.txt** = single source of truth for bot persona
+- **persona.md + rules.md** = single source of truth for bot persona
 
 ---
 

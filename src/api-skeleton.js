@@ -1,4 +1,4 @@
-import { getPersonalityContent, savePersonality } from './personality.js';
+import { getPersonaContent, savePersona, getRulesContent, saveRules } from './persona.js';
 import { setBlacklist } from './gatekeeper.js';
 import { setCircuitBreakerEnabled } from './pipeline.js';
 import { scanAll } from './redis.js';
@@ -165,27 +165,27 @@ export async function handleGetFriends(req, res) {
 }
 
 /**
- * GET /api/personality
+ * GET /api/persona
  * Requires auth.
- * Returns the current personality text content.
+ * Returns the current persona text content.
  */
-export async function handleGetPersonality(req, res) {
+export async function handleGetPersona(req, res) {
   try {
-    const content = await getPersonalityContent(req.redis);
+    const content = await getPersonaContent(req.redis);
     json(res, 200, { content });
   } catch (err) {
-    logger.error({ err }, 'Get personality handler error');
+    logger.error({ err }, 'Get persona handler error');
     json(res, 500, { error: 'Internal server error' });
   }
 }
 
 /**
- * PUT /api/personality
+ * PUT /api/persona
  * Requires auth.
- * Saves the personality content sent in the request body.
+ * Saves the persona content sent in the request body.
  * Expects: { content: string }
  */
-export async function handleUpdatePersonality(req, res) {
+export async function handleUpdatePersona(req, res) {
   try {
     const body = await readBody(req);
     const { content } = body;
@@ -195,10 +195,49 @@ export async function handleUpdatePersonality(req, res) {
       return;
     }
 
-    await savePersonality(req.redis, String(content));
-    json(res, 200, { message: 'Personality updated' });
+    await savePersona(req.redis, String(content));
+    json(res, 200, { message: 'Persona updated' });
   } catch (err) {
-    logger.error({ err }, 'Update personality handler error');
+    logger.error({ err }, 'Update persona handler error');
+    json(res, 500, { error: 'Internal server error' });
+  }
+}
+
+/**
+ * GET /api/rules
+ * Requires auth.
+ * Returns the current rules text content.
+ */
+export async function handleGetRules(req, res) {
+  try {
+    const content = await getRulesContent(req.redis);
+    json(res, 200, { content });
+  } catch (err) {
+    logger.error({ err }, 'Get rules handler error');
+    json(res, 500, { error: 'Internal server error' });
+  }
+}
+
+/**
+ * PUT /api/rules
+ * Requires auth.
+ * Saves the rules content sent in the request body.
+ * Expects: { content: string }
+ */
+export async function handleUpdateRules(req, res) {
+  try {
+    const body = await readBody(req);
+    const { content } = body;
+
+    if (content === undefined || content === null) {
+      json(res, 400, { error: 'Field "content" is required' });
+      return;
+    }
+
+    await saveRules(req.redis, String(content));
+    json(res, 200, { message: 'Rules updated' });
+  } catch (err) {
+    logger.error({ err }, 'Update rules handler error');
     json(res, 500, { error: 'Internal server error' });
   }
 }
@@ -762,8 +801,10 @@ export function registerApiRoutes(router, requireAuth) {
   router.get('/api/friends/:userId/memory', requireAuth, handleGetFriendMemory);
   router.put('/api/friends/:userId/memory', requireAuth, handleUpdateFriendMemory);
   router.delete('/api/friends/:userId/memory', requireAuth, handleClearFriendMemory);
-  router.get('/api/personality', requireAuth, handleGetPersonality);
-  router.put('/api/personality', requireAuth, handleUpdatePersonality);
+  router.get('/api/persona', requireAuth, handleGetPersona);
+  router.put('/api/persona', requireAuth, handleUpdatePersona);
+  router.get('/api/rules', requireAuth, handleGetRules);
+  router.put('/api/rules', requireAuth, handleUpdateRules);
   router.get('/api/settings', requireAuth, handleGetSettings);
   router.put('/api/settings', requireAuth, handleUpdateSettings);
 

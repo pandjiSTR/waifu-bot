@@ -1,6 +1,6 @@
 import pino from 'pino';
 import { normalizeNumber, getOwnerNumbers } from './util.js';
-import { buildSystemPrompt } from './personality.js';
+import { buildSystemPrompt } from './persona.js';
 import { chat } from './llm.js';
 import { getWindow, addMessage } from './context.js';
 import { isOpen } from './circuit.js';

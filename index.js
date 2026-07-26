@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import pino from 'pino';
 import { createRedisClient, closeRedis } from './src/redis.js';
 import { validateAuthConfig, handleLogin, handleLogout, requireAuth } from './src/auth.js';
-import { loadPersonality } from './src/personality.js';
+import { loadPersona, loadRules } from './src/persona.js';
 import { loadBlacklist } from './src/gatekeeper.js';
 import { setCircuitBreakerEnabled } from './src/pipeline.js';
 import { initWhatsApp } from './src/baileys.js';
@@ -15,8 +15,10 @@ import {
   handleHealth,
   handleOverview,
   handleGetFriends,
-  handleGetPersonality,
-  handleUpdatePersonality,
+  handleGetPersona,
+  handleUpdatePersona,
+  handleGetRules,
+  handleUpdateRules,
   handleGetSettings,
   handleUpdateSettings,
   registerApiRoutes,
@@ -229,8 +231,9 @@ export async function main() {
     }
   }
 
-  // Preload personality into Redis cache
-  await loadPersonality(redis);
+  // Preload persona and rules into Redis cache
+  await loadPersona(redis);
+  await loadRules(redis);
 
   // Start WhatsApp (best-effort; degrades gracefully if it fails).
   let wa = { sock: null, stop: async () => {} };
@@ -259,8 +262,10 @@ export async function main() {
   // Protected API routes — requireAuth middleware applied
   router.get('/api/overview', requireAuth, handleOverview);
   router.get('/api/friends', requireAuth, handleGetFriends);
-  router.get('/api/personality', requireAuth, handleGetPersonality);
-  router.put('/api/personality', requireAuth, handleUpdatePersonality);
+  router.get('/api/persona', requireAuth, handleGetPersona);
+  router.put('/api/persona', requireAuth, handleUpdatePersona);
+  router.get('/api/rules', requireAuth, handleGetRules);
+  router.put('/api/rules', requireAuth, handleUpdateRules);
   router.get('/api/settings', requireAuth, handleGetSettings);
   router.put('/api/settings', requireAuth, handleUpdateSettings);
 

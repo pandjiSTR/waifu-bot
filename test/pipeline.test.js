@@ -655,7 +655,7 @@ test('processLLM search loop: injects results and strips [SEARCH] token from fin
       chat: async (msgs) => {
         callCount++;
         if (callCount === 1) {
-          // First call: emits a [SEARCH] token per personality.txt.
+          // First call: emits a [SEARCH] token per persona.md/rules.md.
           return '[SEARCH: cuaca jakarta]';
         }
         // Second call: gives the actual answer using search results.
@@ -1044,7 +1044,7 @@ test('stripMemoryTokens removes only memory tokens leaving SEARCH tokens intact'
 
 test('processLLM extracts memory tokens from reply, persists via Redis, and strips them from output', async () => {
   // Map-backed mock Redis that satisfies ioredis-like API used by
-  // context.js (lpush/lrange/ltrim/expire), personality.js (get),
+  // context.js (lpush/lrange/ltrim/expire), persona.js (get),
   // and memory.js (get/set).
   const store = new Map();
   const mockRedis = {

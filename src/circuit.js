@@ -15,7 +15,7 @@ const COOLDOWN_MS = parseInt(process.env.CIRCUIT_BREAKER_COOLDOWN_MS || '300000'
 
 // In-process breaker state. Simple and minimal per PRD §6.3: a single cooldown
 // flag, no per-user counters and no dashboard tuning. circuit.js deliberately
-// imports NOTHING from llm/context/pipeline/personality to avoid circular deps.
+// imports NOTHING from llm/context/pipeline/persona to avoid circular deps.
 let failCount = 0;
 let cooldownUntil = 0; // epoch ms; 0 means closed
 
