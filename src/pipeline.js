@@ -327,7 +327,7 @@ export async function processLLM(body, ctx) {
 
     messages.push({
       role: 'user',
-      content: `[HASIL PENCARIAN]\n${results}\n\nGunakan hasil di atas untuk menjawab. Kalo nemu link, tulis langsung URL-nya, jangan pake placeholder.`,
+      content: `[HASIL PENCARIAN]\n${results}\n\nLangsung jawab aja, jangan mulai dengan "bentar", "tunggu", atau "sebentar". Kalo nemu link, tulis langsung URL-nya.`,
     });
 
     try {
@@ -366,7 +366,7 @@ export async function processLLM(body, ctx) {
 // returned empty or the follow-up LLM call errored).  The persona.md
   // forbids sending "tunggu" as a message, but this is a safety net so users
   // never see a fake wait message followed by silence.
-  const stripped = reply.replace(/^(tunggu\s*(ya|dulu|sebentar|bentar)?[\s,.\n]*)+/i, '').trim();
+  const stripped = reply.replace(/^(bentar|tunggu|sebentar|wait)\s*(ya|dulu|sebentar|aku|nih)?[\s,.\n]*/i, '').trim();
   if (stripped !== reply) {
     reply = stripped;
     logger.warn({ original: reply, stripped }, 'stripped tunggu lead-in from reply');
