@@ -210,6 +210,16 @@ export async function buildSystemPrompt(redis, context = '', facts = '', mood = 
       sections.push(`[SYSTEM: Rules]\n${rulesStr}`);
     }
 
+    // Date/Time section — current time for time-aware responses
+    const now = new Date();
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const wib = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
+    const utc = now.toUTCString().slice(17, 22);
+    sections.push(
+      `[SYSTEM: Date/Time]\nSekarang: ${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}\nWaktu: ${wib} WIB / ${utc} UTC`
+    );
+
     // Memory section — facts and mood about the user
     let memorySection = '';
     const factsArray = Array.isArray(facts) ? facts : [];

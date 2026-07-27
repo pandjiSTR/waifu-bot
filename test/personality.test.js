@@ -232,6 +232,15 @@ test('buildSystemPrompt includes [SYSTEM: Rules] section', async () => {
   assert.match(prompt, /Some rules content/);
 });
 
+test('buildSystemPrompt includes Date/Time section', async () => {
+  const redis = createFakeRedis();
+  await personality.savePersonality(redis, 'Base');
+  const prompt = await personality.buildSystemPrompt(redis);
+  assert.match(prompt, /\[SYSTEM: Date\/Time\]/);
+  assert.match(prompt, /WIB/);
+  assert.match(prompt, /UTC/);
+});
+
 test('buildSystemPrompt omits rules section when no rules loaded', async () => {
   const redis = createFakeRedis();
   await personality.savePersonality(redis, 'Base persona');
