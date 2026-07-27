@@ -328,12 +328,10 @@ export async function processLLM(body, ctx) {
   // Strip any remaining [SEARCH: ...] tokens so the user never sees them.
   reply = stripSearchTokens(reply);
 
-  // Strip leading "tunggu/sebentar/wait" artifacts that remain when a search
-  // was attempted but failed to produce an actual answer (e.g. webSearch
-  // returned empty or the follow-up LLM call errored). The persona.md
-  // forbids sending "tunggu" as a message, but this is a safety net so users
-  // never see a fake wait message followed by silence.
-  const stripped = reply.replace(/^(tunggu\s*(ya|dulu|sebentar|bentar)?[\s,.\n]*)+/i, '').trim();
+// Strip any lead-in "wait" patterns that survive from the LLM's search
+  // preamble (e.g. "bentar aku cariin dulu").  The persona.md forbids these,
+  // but this safety net catches what slips through.
+  const stripped = reply.replace(/^(tunggu|bentar|sebentar|ntar|sabar)\s*(ya|dulu|aku|gue|iya)?[\s,.\n].*$/im, '').trim();
   if (stripped !== reply) {
     reply = stripped;
     logger.warn({ original: reply, stripped }, 'stripped tunggu lead-in from reply');
