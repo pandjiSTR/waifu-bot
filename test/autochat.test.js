@@ -217,6 +217,75 @@ test('maybeProactive sends nothing when no owner is configured', async () => {
   assert.strictEqual(sentText, null, 'no message without owner discord id');
 });
 
+// ───────────────────────── dicuekin (ignored) awareness ─────────────────────────
+
+test('maybeProactive adds dicuekin hint when owner did not reply after Ara last message', async () => {
+  const circuit = await import('../src/circuit.js');
+  circuit.__reset();
+
+  const redis = makeFakeRedis({ 'waifu:autochat:enabled': '1' });
+  // Window (newest-first): Ara's message, no reply after it.
+  redis.lists['waifu:ctx:6285000000000'] = [
+    JSON.stringify({ sender: 'ara', text: 'beb manaaa?', timestamp: '2026-07-30T09:00:00Z' }),
+  ];
+  const origRandom = Math.random;
+  Math.random = () => 0;
+
+  let capturedMessages = null;
+  const mod = await import('../src/autochat.js?ig1=1');
+
+  await mod.maybeProactive({
+    redis,
+    client: {},
+    _testNow: new Date('2026-07-30T12:00:00Z'), // 19:00 WIB — within 08-22 window
+    chat: async (messages) => {
+      capturedMessages = messages;
+      return 'diemin nih';
+    },
+    sendChunks: async () => {},
+  });
+
+  Math.random = origRandom;
+
+  assert.ok(capturedMessages, 'chat should have been called');
+  const sys = capturedMessages[0].content;
+  assert.match(sys, /gak ngebales auto-chat kamu yang terakhir/, 'prompt should include dicuekin hint');
+});
+
+test('maybeProactive does not add dicuekin hint when owner replied after Ara last message', async () => {
+  const circuit = await import('../src/circuit.js');
+  circuit.__reset();
+
+  const redis = makeFakeRedis({ 'waifu:autochat:enabled': '1' });
+  // Window (newest-first): owner reply on top, Ara's message below.
+  redis.lists['waifu:ctx:6285000000000'] = [
+    JSON.stringify({ sender: '6285000000000', text: 'lagi sibuk beb', timestamp: '2026-07-30T09:30:00Z' }),
+    JSON.stringify({ sender: 'ara', text: 'beb manaaa?', timestamp: '2026-07-30T09:00:00Z' }),
+  ];
+  const origRandom = Math.random;
+  Math.random = () => 0;
+
+  let capturedMessages = null;
+  const mod = await import('../src/autochat.js?ig2=1');
+
+  await mod.maybeProactive({
+    redis,
+    client: {},
+    _testNow: new Date('2026-07-30T12:00:00Z'), // 19:00 WIB
+    chat: async (messages) => {
+      capturedMessages = messages;
+      return 'oke deh';
+    },
+    sendChunks: async () => {},
+  });
+
+  Math.random = origRandom;
+
+  assert.ok(capturedMessages, 'chat should have been called');
+  const sys = capturedMessages[0].content;
+  assert.doesNotMatch(sys, /gak ngebales auto-chat kamu yang terakhir/, 'prompt should NOT include dicuekin hint');
+});
+
 // ───────────────────────── startAutoChat ─────────────────────────
 
 test('startAutoChat returns a stop function', async () => {

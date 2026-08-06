@@ -135,11 +135,28 @@ export async function maybeProactive(ctx) {
     const sys = await buildSystemPrompt(redis, recentContext, '', '');
 
     // Task instruction (not persona voice — just the behavior prompt).
-    const taskInstruction =
+    let taskInstruction =
       'Kirim SATU pesan proaktif singkat kepada owner seolah Ara memulai obrolan. ' +
       '1-3 kata, natural ala chat Indonesia, tanpa emoji. ' +
       'Jangan mulai dengan hai/halo. Jangan tanya soal skripsi/jurnal/tugas kuliah. ' +
       '1 kalimat aja. JANGAN ngulang pesan yang pernah kamu kirim sebelumnya.';
+
+    // Detect whether the owner ignored Ara's last auto-chat message
+    // (no non-ara reply after her last message in the window).
+    const lastAraIdx = window.map((m) => m.sender).lastIndexOf('ara');
+    const ignored =
+      lastAraIdx !== -1 &&
+      !window
+        .slice(lastAraIdx + 1)
+        .some((m) => m.sender !== 'ara' && m.sender !== '__summary__');
+
+    if (ignored) {
+      taskInstruction +=
+        ' Owner gak ngebales auto-chat kamu yang terakhir. Buka obrolan dengan nanya ' +
+        'kenapa gak dibales / komentar kalem soal dicuekin (misal "gak bales nih", ' +
+        '"km lagi sibuk ya?", "aku diemin nih") — kalem, gak lebay, jangan ngegas. ' +
+        'Sesekali boleh sedikit kesel tapi tetep santai.';
+    }
 
     // Inject Ara's own recent messages so the LLM knows what NOT to repeat.
     const lastAraMessages = window
