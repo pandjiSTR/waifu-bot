@@ -19,6 +19,16 @@ const MIN_GAP_MS = parseInt(
 ); // 3 hours (overridable via AUTO_CHAT_MIN_GAP_MS)
 const PROBABILITY = 0.4; // 40 % chance per tick to spread messages out
 
+// Random prompt pool so each auto-chat tick asks for something different,
+// preventing the same generic message ("beb manaaa?") from repeating forever.
+const AUTO_CHAT_PROMPTS = [
+  'mulai obrolan sekarang',
+  'Ara lagi senggang, mulai obrolan santai dari topik apa pun',
+  'Ara kepikiran sesuatu, mulai obrolan kecil',
+  'mulai obrolan, cerita atau tanya apa pun yang beda dari biasanya',
+  'mulai obrolan dengan hal random yang lagi kepikiran',
+];
+
 // ── Toggle helpers ──
 
 /**
@@ -129,13 +139,24 @@ export async function maybeProactive(ctx) {
       'Kirim SATU pesan proaktif singkat kepada owner seolah Ara memulai obrolan. ' +
       '1-3 kata, natural ala chat Indonesia, tanpa emoji. ' +
       'Jangan mulai dengan hai/halo. Jangan tanya soal skripsi/jurnal/tugas kuliah. ' +
-      '1 kalimat aja.';
+      '1 kalimat aja. JANGAN ngulang pesan yang pernah kamu kirim sebelumnya.';
+
+    // Inject Ara's own recent messages so the LLM knows what NOT to repeat.
+    const lastAraMessages = window
+      .filter((m) => m.sender === 'ara')
+      .slice(-5)
+      .map((m) => m.text)
+      .join(' | ');
+
+    const userContent = lastAraMessages
+      ? `${AUTO_CHAT_PROMPTS[Math.floor(Math.random() * AUTO_CHAT_PROMPTS.length)]}. Pesan yang pernah kamu kirim sebelumnya: ${lastAraMessages}. Jangan ngulang itu, bikin yang beda.`
+      : AUTO_CHAT_PROMPTS[Math.floor(Math.random() * AUTO_CHAT_PROMPTS.length)];
 
     const chatFn = ctx.chat || chat;
     const text = await chatFn(
       [
         { role: 'system', content: sys + '\n\n' + taskInstruction },
-        { role: 'user', content: 'mulai obrolan sekarang' },
+        { role: 'user', content: userContent },
       ],
       { options: { num_ctx: 4096 } },
     );
